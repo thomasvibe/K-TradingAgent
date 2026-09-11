@@ -221,3 +221,11 @@ __marimo__/
 # Enterprise env file (secrets) and generated run reports
 .env.enterprise
 reports/
+
+# KR: TradingAgents-KR additions
+results/
+*.db
+*.db-journal
+*.db-wal
+*.db-shm
+.env.kr

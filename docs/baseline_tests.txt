@@ -1,0 +1,104 @@
+# Baseline test results (upstream be952b8, before any KR changes)
+date: 2026-09-11T22:53:15+09:00
+python: Python 3.12.14
+pytest: pytest 9.1.1
+command: .venv/bin/python -m pytest -q
+
+## Summary
+676 passed, 2 skipped, 18 warnings, 73 subtests passed in 4.94s
+
+## Failing tests
+(none)
+
+## Skipped tests
+SKIPPED [1] tests/test_bedrock_provider.py:74: could not import 'langchain_aws': No module named 'langchain_aws'
+SKIPPED [1] tests/test_deepseek_reasoning.py:209: DEEPSEEK_API_KEY not set (or placeholder); skipping live API call
+
+## ruff check (upstream baseline)
+All checks passed!
+
+## Full pytest output
+```
+..............................................................s......... [ 10%]
+........................................................................ [ 21%]
+...........................s............................................ [ 31%]
+..................................................................... [ 42%]
+........................................................................ [ 52%]
+.......................................................................... [ 63%]
+........................................................................ [ 74%]
+........................................................................ [ 84%]
+........................................................................ [ 95%]
+...............................                                          [100%]
+=============================== warnings summary ===============================
+tests/test_anthropic_effort.py::TestEffortGate::test_unsupported_models_do_not_receive_effort[claude-haiku-5-0]
+  /home/thomas/projects/TradingAgent/tradingagents/llm_clients/anthropic_client.py:61: RuntimeWarning: Model 'claude-haiku-5-0' is not in the known model list for provider 'anthropic'. Continuing anyway.
+    self.warn_if_unknown_model()
+
+tests/test_anthropic_effort.py::TestEffortGate::test_unsupported_models_do_not_receive_effort[claude-haiku-4-7-preview]
+  /home/thomas/projects/TradingAgent/tradingagents/llm_clients/anthropic_client.py:61: RuntimeWarning: Model 'claude-haiku-4-7-preview' is not in the known model list for provider 'anthropic'. Continuing anyway.
+    self.warn_if_unknown_model()
+
+tests/test_anthropic_effort.py::TestEffortGate::test_unsupported_models_do_not_receive_effort[claude-sonnet-4-5]
+  /home/thomas/projects/TradingAgent/tradingagents/llm_clients/anthropic_client.py:61: RuntimeWarning: Model 'claude-sonnet-4-5' is not in the known model list for provider 'anthropic'. Continuing anyway.
+    self.warn_if_unknown_model()
+
+tests/test_anthropic_effort.py::TestEffortGate::test_unsupported_models_do_not_receive_effort[claude-sonnet-4-0]
+  /home/thomas/projects/TradingAgent/tradingagents/llm_clients/anthropic_client.py:61: RuntimeWarning: Model 'claude-sonnet-4-0' is not in the known model list for provider 'anthropic'. Continuing anyway.
+    self.warn_if_unknown_model()
+
+tests/test_anthropic_effort.py::TestEffortGate::test_current_opus_and_sonnet_receive_effort[claude-opus-4-5]
+  /home/thomas/projects/TradingAgent/tradingagents/llm_clients/anthropic_client.py:61: RuntimeWarning: Model 'claude-opus-4-5' is not in the known model list for provider 'anthropic'. Continuing anyway.
+    self.warn_if_unknown_model()
+
+tests/test_anthropic_effort.py::TestEffortGate::test_current_opus_and_sonnet_receive_effort[claude-opus-4-6]
+  /home/thomas/projects/TradingAgent/tradingagents/llm_clients/anthropic_client.py:61: RuntimeWarning: Model 'claude-opus-4-6' is not in the known model list for provider 'anthropic'. Continuing anyway.
+    self.warn_if_unknown_model()
+
+tests/test_anthropic_effort.py::TestEffortGate::test_current_opus_and_sonnet_receive_effort[claude-sonnet-4-6]
+  /home/thomas/projects/TradingAgent/tradingagents/llm_clients/anthropic_client.py:61: RuntimeWarning: Model 'claude-sonnet-4-6' is not in the known model list for provider 'anthropic'. Continuing anyway.
+    self.warn_if_unknown_model()
+
+tests/test_anthropic_effort.py::TestEffortGate::test_future_opus_sonnet_inherit_effort_via_pattern[claude-opus-5-0]
+  /home/thomas/projects/TradingAgent/tradingagents/llm_clients/anthropic_client.py:61: RuntimeWarning: Model 'claude-opus-5-0' is not in the known model list for provider 'anthropic'. Continuing anyway.
+    self.warn_if_unknown_model()
+
+tests/test_anthropic_effort.py::TestEffortGate::test_future_opus_sonnet_inherit_effort_via_pattern[claude-sonnet-5-0]
+  /home/thomas/projects/TradingAgent/tradingagents/llm_clients/anthropic_client.py:61: RuntimeWarning: Model 'claude-sonnet-5-0' is not in the known model list for provider 'anthropic'. Continuing anyway.
+    self.warn_if_unknown_model()
+
+tests/test_anthropic_effort.py::TestEffortGate::test_claude_5_family_receives_effort[claude-mythos-5]
+  /home/thomas/projects/TradingAgent/tradingagents/llm_clients/anthropic_client.py:61: RuntimeWarning: Model 'claude-mythos-5' is not in the known model list for provider 'anthropic'. Continuing anyway.
+    self.warn_if_unknown_model()
+
+tests/test_anthropic_effort.py::TestEffortGate::test_mythos_preview_receives_effort
+  /home/thomas/projects/TradingAgent/tradingagents/llm_clients/anthropic_client.py:61: RuntimeWarning: Model 'claude-mythos-preview' is not in the known model list for provider 'anthropic'. Continuing anyway.
+    self.warn_if_unknown_model()
+
+tests/test_anthropic_effort.py::TestEffortGate::test_unknown_anthropic_model_does_not_receive_effort
+  /home/thomas/projects/TradingAgent/tradingagents/llm_clients/anthropic_client.py:61: RuntimeWarning: Model 'claude-experimental-x' is not in the known model list for provider 'anthropic'. Continuing anyway.
+    self.warn_if_unknown_model()
+
+tests/test_ollama_base_url.py::test_resolver_does_not_affect_other_providers
+  /home/thomas/projects/TradingAgent/tradingagents/llm_clients/openai_client.py:278: RuntimeWarning: Model 'm' is not in the known model list for provider 'xai'. Continuing anyway.
+    self.warn_if_unknown_model()
+
+tests/test_ollama_base_url.py::test_resolver_does_not_affect_other_providers
+  /home/thomas/projects/TradingAgent/tradingagents/llm_clients/openai_client.py:278: RuntimeWarning: Model 'm' is not in the known model list for provider 'deepseek'. Continuing anyway.
+    self.warn_if_unknown_model()
+
+tests/test_openai_reasoning_effort.py::test_non_reasoning_model_drops_effort
+tests/test_temperature_config.py::TestTemperatureForwarding::test_temperature_reaches_client_when_set[openai-gpt-4.1]
+tests/test_temperature_config.py::TestTemperatureForwarding::test_temperature_omitted_leaves_provider_default
+  /home/thomas/projects/TradingAgent/tradingagents/llm_clients/openai_client.py:278: RuntimeWarning: Model 'gpt-4.1' is not in the known model list for provider 'openai'. Continuing anyway.
+    self.warn_if_unknown_model()
+
+tests/test_temperature_config.py::TestTemperatureForwarding::test_temperature_reaches_client_when_set[deepseek-deepseek-chat]
+  /home/thomas/projects/TradingAgent/tradingagents/llm_clients/openai_client.py:278: RuntimeWarning: Model 'deepseek-chat' is not in the known model list for provider 'deepseek'. Continuing anyway.
+    self.warn_if_unknown_model()
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ============================
+SKIPPED [1] tests/test_bedrock_provider.py:74: could not import 'langchain_aws': No module named 'langchain_aws'
+SKIPPED [1] tests/test_deepseek_reasoning.py:209: DEEPSEEK_API_KEY not set (or placeholder); skipping live API call
+676 passed, 2 skipped, 18 warnings, 73 subtests passed in 4.94s
+```
