@@ -44,6 +44,10 @@ dev = [
 bedrock = [
     "langchain-aws>=1.5.0",
 ]
+# KR: Korean market data layer (pykrx scrapes KRX/Naver; DART/Naver use requests).
+kr = [
+    "pykrx>=1.2.8",
+]
 
 [project.scripts]
 tradingagents = "cli.main:app"
@@ -56,11 +60,12 @@ cli = ["static/*"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-addopts = "-ra --strict-markers"
+addopts = "-ra --strict-markers -m 'not live'"  # KR: live API tests opt-in via -m live
 markers = [
     "unit: fast isolated unit tests",
     "integration: tests requiring external services",
     "smoke: quick sanity-check tests",
+    "live: KR tests that call real external APIs (pykrx/DART/Naver); skipped by default",  # KR
 ]
 filterwarnings = [
     "ignore::DeprecationWarning",

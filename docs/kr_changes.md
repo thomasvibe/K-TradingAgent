@@ -11,3 +11,8 @@ Base: upstream `be952b8` (2026-09-07). Every modified upstream file carries a
 | 0 | `NOTICE_KR.md` (new) | fork notice | Apache-2.0 attribution |
 | 1 | `.env.example` | KR block default `TRADINGAGENTS_LLM_BACKEND_URL` → `http://localhost:8002/v1` | the running llama-server (Qwen3.8-Flash-Next, ctx 131072) listens on 8002, not 8080 |
 | 1 | `scripts/llm_stats.py`, `scripts/smoke_local.py`, `scripts/profile_run.py` (new) | Phase 1 measurement scripts; `smoke_structured_output.py` left untouched | per-schema parse rate, per-node time/tokens |
+| 2 | `tradingagents/default_config.py` | `"market": "US"` key + `TRADINGAGENTS_MARKET` env override | single KR switch (§4-2) |
+| 2 | `tradingagents/dataflows/interface.py` | import `kr.{krx,dart,naver_news}`; `VENDOR_LIST` += krx/dart/naver; `VENDOR_METHODS` KR entries; new categories `kr_market_data`, `kr_disclosure` | vendor registration (§7-5) |
+| 2 | `tradingagents/dataflows/stockstats_utils.py` | `load_ohlcv` branches to `kr.krx.load_ohlcv_kr` when `market == "KR"` | replaces `yf.download` for KR while keeping cutoff/stale guards; indicators + validator inherit it (§7-2) |
+| 2 | `pyproject.toml` | `live` pytest marker, default `-m 'not live'`, optional extra `kr = ["pykrx>=1.2.8"]` | offline default test run (§13) |
+| 2 | new: `tradingagents/dataflows/kr/{__init__,cache,symbols,krx,dart,naver_news}.py`, `tradingagents/agents/utils/kr_tools.py`, `kr/collect_news.py`, `scripts/kr_samples.py`, `tests/kr/*`, `docs/kr_data_matrix.md`, `docs/samples/*` | Korean data layer | Phase 2 |

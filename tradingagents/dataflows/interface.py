@@ -18,6 +18,9 @@ from .errors import (
     VendorRateLimitError,
 )
 from .fred import get_macro_data as get_fred_macro_data
+
+# KR: Korean-market vendors (pykrx / OpenDART / Naver News). See docs/kr_changes.md.
+from .kr import dart as kr_dart, krx as kr_krx, naver_news as kr_naver
 from .polymarket import get_prediction_markets as get_polymarket_prediction_markets
 from .y_finance import (
     get_balance_sheet as get_yfinance_balance_sheet,
@@ -74,7 +77,22 @@ TOOLS_CATEGORIES = {
         "tools": [
             "get_prediction_markets",
         ]
-    }
+    },
+    # KR: Korean exchange flow/short/index data and DART filings
+    "kr_market_data": {
+        "description": "KRX investor flows, short selling, and index/market overview",
+        "tools": [
+            "get_investor_flow",
+            "get_short_selling",
+            "get_market_overview",
+        ]
+    },
+    "kr_disclosure": {
+        "description": "DART regulatory disclosures (point-in-time event source)",
+        "tools": [
+            "get_disclosures",
+        ]
+    },
 }
 
 VENDOR_LIST = [
@@ -82,6 +100,10 @@ VENDOR_LIST = [
     "fred",
     "polymarket",
     "alpha_vantage",
+    # KR: Korean-market vendors
+    "krx",
+    "dart",
+    "naver",
 ]
 
 # Optional enrichment categories. These add macro/event context to the news
@@ -97,41 +119,51 @@ VENDOR_METHODS = {
     "get_stock_data": {
         "alpha_vantage": get_alpha_vantage_stock,
         "yfinance": get_YFin_data_online,
+        "krx": kr_krx.get_stock_data,  # KR
     },
     # technical_indicators
     "get_indicators": {
         "alpha_vantage": get_alpha_vantage_indicator,
         "yfinance": get_stock_stats_indicators_window,
+        # KR: same stockstats path; load_ohlcv branches to pykrx when market == "KR"
+        "krx": get_stock_stats_indicators_window,
     },
     # fundamental_data
     "get_fundamentals": {
         "alpha_vantage": get_alpha_vantage_fundamentals,
         "yfinance": get_yfinance_fundamentals,
+        "krx": kr_krx.get_fundamentals,  # KR: KRX valuation snapshot (PER/PBR/cap/foreign)
     },
     "get_balance_sheet": {
         "alpha_vantage": get_alpha_vantage_balance_sheet,
         "yfinance": get_yfinance_balance_sheet,
+        "dart": kr_dart.get_balance_sheet,  # KR
     },
     "get_cashflow": {
         "alpha_vantage": get_alpha_vantage_cashflow,
         "yfinance": get_yfinance_cashflow,
+        "dart": kr_dart.get_cashflow,  # KR
     },
     "get_income_statement": {
         "alpha_vantage": get_alpha_vantage_income_statement,
         "yfinance": get_yfinance_income_statement,
+        "dart": kr_dart.get_income_statement,  # KR
     },
     # news_data
     "get_news": {
         "alpha_vantage": get_alpha_vantage_news,
         "yfinance": get_news_yfinance,
+        "naver": kr_naver.get_news,  # KR
     },
     "get_global_news": {
         "yfinance": get_global_news_yfinance,
         "alpha_vantage": get_alpha_vantage_global_news,
+        "naver": kr_naver.get_global_news,  # KR
     },
     "get_insider_transactions": {
         "alpha_vantage": get_alpha_vantage_insider_transactions,
         "yfinance": get_yfinance_insider_transactions,
+        "dart": kr_dart.get_insider_transactions,  # KR: 임원·주요주주 / 대량보유 보고
     },
     # macro_data
     "get_macro_indicators": {
@@ -141,6 +173,12 @@ VENDOR_METHODS = {
     "get_prediction_markets": {
         "polymarket": get_polymarket_prediction_markets,
     },
+    # KR: kr_market_data
+    "get_investor_flow": {"krx": kr_krx.get_investor_flow},
+    "get_short_selling": {"krx": kr_krx.get_short_selling},
+    "get_market_overview": {"krx": kr_krx.get_market_overview},
+    # KR: kr_disclosure
+    "get_disclosures": {"dart": kr_dart.get_disclosures},
 }
 
 def get_category_for_method(method: str) -> str:

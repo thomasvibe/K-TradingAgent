@@ -1,0 +1,16 @@
+{
+  "_note": "Shape per developers.naver.com/docs/serviceapi/search/news/news.md (fetched 2026-09-11); values illustrative, live capture pending credentials",
+  "lastBuildDate": "Fri, 11 Sep 2026 18:00:00 +0900",
+  "total": 12345,
+  "start": 1,
+  "display": 1,
+  "items": [
+    {
+      "title": "<b>삼성전자</b>, 3분기 실적 발표",
+      "originallink": "https://www.example-news.co.kr/article/1",
+      "link": "https://n.news.naver.com/mnews/article/000/0000001",
+      "description": "<b>삼성전자</b>가 3분기 실적을 발표했다 &amp; ...",
+      "pubDate": "Fri, 11 Sep 2026 17:30:00 +0900"
+    }
+  ]
+}

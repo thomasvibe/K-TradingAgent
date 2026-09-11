@@ -188,6 +188,13 @@ def load_ohlcv(symbol: str, curr_date: str) -> pd.DataFrame:
     subsequent calls the cache is reused. Rows after curr_date are
     filtered out so backtests never see future prices.
     """
+    # KR: Korean market serves adjusted OHLCV from pykrx (SQLite-cached) with the
+    # same shape and look-ahead cutoff, so indicators/validator work unchanged.
+    if str(get_config().get("market", "US")).upper() == "KR":
+        from .kr.krx import load_ohlcv_kr
+
+        return load_ohlcv_kr(symbol, curr_date)
+
     # Resolve broker/forex symbols (XAUUSD+ -> GC=F) to Yahoo's convention,
     # then reject values that would escape the cache directory when
     # interpolated into the cache filename (e.g. ``../../tmp/x``).

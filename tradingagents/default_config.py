@@ -20,6 +20,7 @@ _ENV_OVERRIDES = {
     "TRADINGAGENTS_TEMPERATURE":          "temperature",
     "TRADINGAGENTS_LLM_MAX_RETRIES":      "llm_max_retries",
     "TRADINGAGENTS_MAX_TOKENS":           "max_tokens",
+    "TRADINGAGENTS_MARKET":               "market",  # KR: "US" (default) or "KR"
     # Provider-specific reasoning/thinking knobs (None = each provider's own
     # default). Settable here for non-interactive runs; the CLI also offers an
     # interactive choice, which is skipped when the matching var is set.
@@ -78,6 +79,9 @@ DEFAULT_CONFIG = _apply_env_overrides({
     # the oldest resolved entries are pruned once this limit is exceeded.
     # Pending entries are never pruned. None disables rotation entirely.
     "memory_log_max_entries": None,
+    # KR: market switch. "KR" routes OHLCV/identity/reflection to the Korean data
+    # layer (tradingagents/dataflows/kr) and disables US-only sources.
+    "market": "US",
     # LLM settings
     "llm_provider": "openai",
     "deep_think_llm": "gpt-5.6",
