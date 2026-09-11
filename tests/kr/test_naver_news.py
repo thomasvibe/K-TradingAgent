@@ -10,6 +10,8 @@ ITEMS = [
      "description": "<b>반도체</b> 호조 &amp; 수요", "pubDate": "Wed, 10 Sep 2025 09:00:00 +0900"},
     {"title": "<b>삼성전자</b> 미래 기사", "originallink": "https://a.example/2", "link": "https://n.naver.com/2",
      "description": "FUTURE", "pubDate": "Mon, 15 Sep 2025 09:00:00 +0900"},
+    {"title": "자정 직후 기사", "originallink": "https://a.example/4", "link": "https://n.naver.com/4",
+     "description": "AFTER_MIDNIGHT", "pubDate": "Fri, 12 Sep 2025 00:16:00 +0900"},
     {"title": "오래된 기사", "originallink": "https://a.example/3", "link": "https://n.naver.com/3",
      "description": "old", "pubDate": "Mon, 01 Sep 2025 09:00:00 +0900"},
     {"title": "삼성전자 &lt;b&gt;실적&lt;/b&gt; 발표", "originallink": "https://a.example/1", "link": "https://n.naver.com/1",
@@ -27,9 +29,9 @@ def test_clean_text_and_pubdate():
 
 @pytest.mark.unit
 def test_archive_window_filter_and_dedupe(kr_env):
-    assert nn.archive_upsert("삼성전자", ITEMS) == 4
+    assert nn.archive_upsert("삼성전자", ITEMS) == 5
     got = nn.archive_query("삼성전자", "2025-09-05", TRADE_DATE)
-    assert [g["originallink"] for g in got] == ["https://a.example/1"]
+    assert [g["originallink"] for g in got] == ["https://a.example/1"]  # 00:16 KST next day excluded
     assert got[0]["title"] == "삼성전자 실적 발표"
 
 
@@ -109,3 +111,15 @@ def test_search_news_sends_hub_headers(kr_env, monkeypatch):
     assert seen["url"].startswith("https://naverapihub.apigw.ntruss.com/")
     assert seen["headers"] == {"X-NCP-APIGW-API-KEY-ID": "id", "X-NCP-APIGW-API-KEY": "secret"}
     assert seen["params"] == {"query": "삼성전자", "display": 100, "start": 1, "sort": "date"}
+
+
+@pytest.mark.unit
+def test_in_window_kst_cuts_at_korean_midnight():
+    from datetime import datetime, timedelta, timezone
+
+    kst = timezone(timedelta(hours=9))
+    assert nn.in_window_kst(datetime(2025, 9, 11, 23, 59, tzinfo=kst), "2025-09-05", "2025-09-11")
+    assert not nn.in_window_kst(datetime(2025, 9, 12, 0, 16, tzinfo=kst), "2025-09-05", "2025-09-11")
+    # same instant expressed in UTC (15:16Z on 9/11) is still 9/12 in Korea -> excluded
+    assert not nn.in_window_kst(datetime(2025, 9, 11, 15, 16, tzinfo=timezone.utc), "2025-09-05", "2025-09-11")
+    assert not nn.in_window_kst(None, "2025-09-05", "2025-09-11")

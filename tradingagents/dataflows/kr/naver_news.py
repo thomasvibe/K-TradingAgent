@@ -20,8 +20,8 @@ Constraint: there is no date filter and at most 1,000 results per query, so
 past news cannot be queried live. Every live result is appended to the
 ``news_archive`` SQLite table; ``kr/collect_news.py`` runs daily to grow it.
 
-Point-in-time: articles are kept only when ``pubDate`` falls inside
-``[start_date, end_date]`` (shared ``date_window.in_window`` rule, UTC-normalised).
+Point-in-time: articles are kept only when ``pubDate``'s Korean local date falls
+inside ``[start_date, end_date]`` (KST midnight cutoff, see ``in_window_kst``).
 In backtest mode (``kr.backtest_mode``) the live API is never called; the archive
 is the only source and an empty result says so explicitly.
 """
@@ -33,7 +33,7 @@ import logging
 import os
 import re
 import time
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 from email.utils import parsedate_to_datetime
 from typing import Annotated
 from urllib.parse import urlparse
@@ -42,7 +42,6 @@ import pandas as pd
 import requests
 
 from tradingagents.dataflows.config import get_config
-from tradingagents.dataflows.date_window import in_window
 from tradingagents.dataflows.errors import VendorNotConfiguredError, VendorRateLimitError
 
 from . import kr_setting
@@ -74,6 +73,24 @@ CREATE TABLE IF NOT EXISTS news_archive (
 );
 CREATE INDEX IF NOT EXISTS idx_news_archive_pub ON news_archive(query, pub_date);
 """
+
+
+KST = timezone(timedelta(hours=9))
+
+
+def in_window_kst(pub_dt: datetime | None, start_date: str, end_date: str) -> bool:
+    """Keep an article only when its Korean local date is within ``[start_date, end_date]``.
+
+    Upstream ``date_window.in_window`` bounds the window in UTC, which for KRX
+    would admit articles published until 09:00 KST of the day after the trade
+    date. Korean market news is cut at KST midnight instead; undated items are
+    dropped (no proof they are not from the future).
+    """
+    if pub_dt is None:
+        return False
+    local = (pub_dt if pub_dt.tzinfo else pub_dt.replace(tzinfo=KST)).astimezone(KST)
+    day = local.strftime("%Y-%m-%d")
+    return start_date <= day <= end_date
 
 
 def clean_text(value: str | None) -> str:
@@ -167,15 +184,15 @@ def archive_upsert(query: str, items: list[dict]) -> int:
 def archive_query(query: str, start_date: str, end_date: str) -> list[dict]:
     """Archived articles for ``query`` inside the window, newest first, unique by originallink."""
     conn = _archive_conn()
-    start_dt = datetime.strptime(start_date, "%Y-%m-%d")
-    end_dt = datetime.strptime(end_date, "%Y-%m-%d")
+    datetime.strptime(start_date, "%Y-%m-%d")
+    datetime.strptime(end_date, "%Y-%m-%d")
     cur = conn.execute(
         "SELECT originallink, link, title, description, pub_date FROM news_archive "
         "WHERE query = ? AND pub_date IS NOT NULL ORDER BY pub_date DESC", (query,))
     out, seen = [], set()
     for originallink, link, title, description, pub_date in cur.fetchall():
         pub = datetime.fromisoformat(pub_date) if pub_date else None
-        if not in_window(pub, start_dt, end_dt) or originallink in seen:
+        if not in_window_kst(pub, start_date, end_date) or originallink in seen:
             continue
         seen.add(originallink)
         out.append({"originallink": originallink, "link": link, "title": title,
@@ -295,5 +312,5 @@ def get_global_news(
                            f"{', '.join(queries)}):", limit)
 
 
-__all__ = ["search_news", "endpoint", "NAVER_ENDPOINTS", "collect", "archive_upsert", "archive_query", "clean_text", "parse_pubdate",
+__all__ = ["search_news", "in_window_kst", "endpoint", "NAVER_ENDPOINTS", "collect", "archive_upsert", "archive_query", "clean_text", "parse_pubdate",
            "get_news", "get_global_news", "ticker_query"]
