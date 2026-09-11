@@ -51,6 +51,9 @@ KR_DEFAULTS: dict = {
     ],
     # backtest mode: never call the live news API; archive only
     "backtest_mode": False,
+    # structured output method for the local OpenAI-compatible server:
+    # None = upstream default (function_calling); "json_schema" = grammar-constrained
+    "structured_output_method": "json_schema",
     # DART corp_code map refresh interval (days)
     "dart_corp_code_ttl_days": 7,
 }

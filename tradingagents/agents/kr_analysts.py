@@ -44,6 +44,10 @@ _COLLAB_SYSTEM = (
     "{system_message}"
 )
 
+LENGTH_RULE = (
+    " Keep the report focused: at most about 900 words plus the summary table; prefer numbers with dates over prose."
+)
+
 NO_RETRY_RULE = (
     " Call each tool at most once per distinct argument set. If a tool answers with 'no data', "
     "'unavailable', 'NO_DATA_AVAILABLE' or '데이터 없음', do not call it again; state the gap in the "
@@ -82,7 +86,7 @@ def create_kr_news_analyst(llm):
         "5%-holder ownership reports; get_market_overview(curr_date, look_back_days) for KOSPI/KOSDAQ moves "
         "and foreign/institutional net flows. Distinguish company-specific catalysts from market-wide moves, "
         "note the Korean market's sensitivity to foreign investor flows and the won, and cite dates."
-        + NO_RETRY_RULE
+        + NO_RETRY_RULE + LENGTH_RULE
         + " Make sure to append a Markdown table at the end of the report to organize key points in the report, "
         "organized and easy to read."
         + get_language_instruction()
@@ -105,7 +109,7 @@ def create_kr_fundamentals_analyst(llm):
         "statements show single-quarter amounts (Q4 = full year minus nine-month cumulative) while cash-flow "
         "statements are cumulative year-to-date; each statement column carries its DART filing date (접수일) — "
         "always cite the filing date of the figures you use and never use a report filed after today's date."
-        + NO_RETRY_RULE
+        + NO_RETRY_RULE + LENGTH_RULE
         + " Make sure to append a Markdown table at the end of the report to organize key points in the report, "
         "organized and easy to read."
         + get_language_instruction()
@@ -206,6 +210,6 @@ Rising short share and balance signal bearish positioning; a high balance can al
 - **overall_band**: Exactly one of Bullish / Mildly Bullish / Neutral / Mixed / Mildly Bearish / Bearish. Use Mixed when sources disagree; Neutral only when all sources are genuinely silent.
 - **overall_score**: 0 (maximally bearish) to 10 (maximally bullish); 5 is neutral. Keep it consistent with overall_band.
 - **confidence**: low / medium / high, based on data availability and sample size.
-- **narrative**: Source-by-source breakdown (news, investor flows, short selling), divergences, dominant themes, catalysts and risks, and a markdown summary table of key sentiment signals (direction, source, supporting evidence with dates and figures).
+- **narrative**: Source-by-source breakdown (news, investor flows, short selling), divergences, dominant themes, catalysts and risks, and a markdown summary table of key sentiment signals (direction, source, supporting evidence with dates and figures). **Hard limit: about 500 words plus the table** — lead with figures and dates, no repetition of the raw data blocks.
 
 {get_language_instruction()}"""

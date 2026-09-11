@@ -23,6 +23,8 @@ import tradingagents  # noqa: F401  (loads .env)
 from kr.config_kr import PROJECT_ROOT, build_kr_config
 from kr.http_audit import HttpAudit
 from kr.llm_stats import FallbackCounter, NodeStatsHandler
+from kr.report import summarize, write_report
+from kr.telegram import format_summary, format_watchlist_table, send_document, send_text
 
 logger = logging.getLogger("kr.run")
 FORBIDDEN_SOURCES = re.compile(r"Reddit|StockTwits|FRED|Polymarket|Yahoo|레딧|스탁트위츠|야후", re.IGNORECASE)
@@ -83,7 +85,46 @@ def run_one(ticker: str, date: str, args, config: dict) -> dict:
     logger.info("%s %s -> %s in %.0fs (fallbacks %d, forbidden %s, http offenders %s)",
                 code, date, signal, seconds, len(counter.fallbacks), forbidden or "none",
                 (http_report or {}).get("offenders") or "none")
+
+    # Obsidian report + Telegram (both best-effort; the analysis result above is already on disk).
+    from tradingagents.dataflows.kr.symbols import get_market, get_ticker_name
+
+    name = _safe_call(lambda: get_ticker_name(code), code)
+    market = _safe_call(lambda: get_market(code, date), "") or ""
+    run_summary = summarize(final_state, ticker=code, name=name, market=market, trade_date=date, signal=signal,
+                            model=config["deep_think_llm"], run_seconds=seconds)
+    md_path = write_report(run_summary, final_state, data_sources(config, date))
+    summary["report_path"] = str(md_path)
+    logger.info("report -> %s", md_path)
+    if not args.no_telegram:
+        sent = send_text(format_summary(run_summary))
+        if args.attach:
+            send_document(md_path, caption=f"{name} ({code}) {date} {signal}")
+        summary["telegram_sent"] = sent
+    summary["_run_summary"] = run_summary
     return summary
+
+
+def _safe_call(fn, default):
+    try:
+        return fn()
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("lookup failed: %s", exc)
+        return default
+
+
+def data_sources(config: dict, date: str) -> list[tuple[str, str]]:
+    kr = config.get("kr", {})
+    return [
+        ("KRX 주가·지표·검증 스냅샷 (pykrx, 수정주가)", f"{date} 종가까지, 최근 {kr.get('ohlcv_max_rows', 120)}행"),
+        ("KRX 밸류에이션 (PER/PBR/시가총액/외국인)", f"{date} 기준 일별 값"),
+        ("KRX 투자자별 순매수", f"{date}까지 {kr.get('investor_flow_days', 20)}거래일"),
+        ("KRX 공매도 거래·잔고", f"공개 시차 {kr.get('short_status_lag_days', 2)}거래일 반영 ({date} 기준 관측 가능분)"),
+        ("OpenDART 재무제표", f"접수일 ≤ {date} 보고서만, 연결 우선, 억원"),
+        ("OpenDART 공시·지분보고", f"접수일 ≤ {date}, 최근 {kr.get('disclosure_lookback_days', 30)}일"),
+        ("Naver News (API HUB)", f"{date} KST 자정까지 7일, 아카이브 기반"),
+        ("KOSPI/KOSDAQ 지수·시장 수급", f"{date}까지 {kr.get('market_overview_days', 20)}거래일"),
+    ]
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -125,6 +166,9 @@ def main(argv: list[str] | None = None) -> int:
         except Exception:  # noqa: BLE001 — keep the watchlist going
             logger.exception("run failed for %s", t)
             summaries.append({"ticker": t, "trade_date": date, "signal": "ERROR"})
+    run_summaries = [s.pop("_run_summary") for s in summaries if "_run_summary" in s]
+    if args.watchlist and run_summaries and not args.no_telegram:
+        send_text(format_watchlist_table(run_summaries))
     print(json.dumps(summaries, ensure_ascii=False, indent=2, default=str))
     return 0 if all(s.get("signal") not in (None, "ERROR", "REVIEW") for s in summaries) else 1
 

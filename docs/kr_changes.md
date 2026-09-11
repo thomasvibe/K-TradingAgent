@@ -24,3 +24,6 @@ Base: upstream `be952b8` (2026-09-07). Every modified upstream file carries a
 | 3 | `tradingagents/agents/schemas.py` | KRW examples in field descriptions; `_coerce_optional_float` strips 원/₩/KRW, returns None for 만원/억원/천원 | §8-8 |
 | 3 | `tradingagents/default_config.py` | `reflection_holding_days: 5` | replaces the hardcoded 5 (§8-7) |
 | 3 | new: `tradingagents/agents/kr_analysts.py`, `tradingagents/dataflows/kr/identity.py`, `kr/{config_kr,run,http_audit,llm_stats}.py`, `tests/kr/test_agents_kr.py` | KR analysts, identity, CLI, HTTP audit | Phase 3 |
+| 4 | `tradingagents/llm_clients/openai_client.py` | `LocalCompatibleChatOpenAI.with_structured_output` honours `kr.structured_output_method` (json_schema) | grammar-constrained output on llama-server removes prose fallbacks (time) |
+| 4 | `tradingagents/agents/kr_analysts.py` | length caps (~900 words; sentiment narrative ~500 words) | run time |
+| 4 | new: `kr/report.py`, `kr/telegram.py`, `watchlist.txt`, `tests/kr/test_report_telegram.py`; `kr/run.py` wired for Obsidian md + Telegram | Phase 4 |

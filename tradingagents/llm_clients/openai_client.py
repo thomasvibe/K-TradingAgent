@@ -62,6 +62,15 @@ class LocalCompatibleChatOpenAI(NormalizedChatOpenAI):
     """
 
     def with_structured_output(self, schema, *, method=None, **kwargs):
+        # KR: llama-server enforces ``response_format=json_schema`` with a grammar, which
+        # removes the "model answered in prose instead of calling the tool" fallbacks seen
+        # with function_calling. Opt in via config ``kr.structured_output_method``.
+        if method is None:
+            from tradingagents.dataflows.config import get_config
+
+            configured = (get_config().get("kr") or {}).get("structured_output_method")
+            if configured in ("json_schema", "json_mode", "function_calling"):
+                method = configured
         resolved = method or get_capabilities(self.model_name).preferred_structured_method
         if resolved == "function_calling":
             kwargs.setdefault("tool_choice", None)

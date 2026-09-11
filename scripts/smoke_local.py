@@ -24,6 +24,7 @@ import sys
 import time
 from pathlib import Path
 
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))  # project root -> `kr` importable
 from kr.llm_stats import FallbackCounter, NodeStatsHandler, discover_model_id
 from tradingagents.agents.managers.portfolio_manager import create_portfolio_manager
 from tradingagents.agents.managers.research_manager import create_research_manager
@@ -125,15 +126,20 @@ def main() -> int:
     parser.add_argument("--output-language", default="English")
     parser.add_argument("--json-out", default=None, help="write raw per-attempt results here")
     parser.add_argument("--verbose", action="store_true", help="print rendered outputs")
+    parser.add_argument("--structured-method", default=None,
+                        choices=["function_calling", "json_schema", "json_mode"],
+                        help="override kr.structured_output_method for the local provider")
     args = parser.parse_args()
 
     logging.basicConfig(level=logging.WARNING, format="%(levelname)s %(name)s: %(message)s")
 
     model = args.model or discover_model_id(args.base_url)
-    print(f"Provider: {args.provider}\nBase URL: {args.base_url}\nModel: {model}\nRepeat: {args.repeat}")
+    print(f"Provider: {args.provider}\nBase URL: {args.base_url}\nModel: {model}\nRepeat: {args.repeat}\n"
+          f"Structured method: {args.structured_method or 'default (function_calling)'}")
 
     from tradingagents.dataflows.config import set_config
-    set_config({"output_language": args.output_language})
+    set_config({"output_language": args.output_language,
+                "kr": {"structured_output_method": args.structured_method}})
 
     handler = NodeStatsHandler()
     counter = FallbackCounter().attach()
