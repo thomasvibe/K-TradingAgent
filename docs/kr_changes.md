@@ -16,3 +16,4 @@ Base: upstream `be952b8` (2026-09-07). Every modified upstream file carries a
 | 2 | `tradingagents/dataflows/stockstats_utils.py` | `load_ohlcv` branches to `kr.krx.load_ohlcv_kr` when `market == "KR"` | replaces `yf.download` for KR while keeping cutoff/stale guards; indicators + validator inherit it (§7-2) |
 | 2 | `pyproject.toml` | `live` pytest marker, default `-m 'not live'`, optional extra `kr = ["pykrx>=1.2.8"]` | offline default test run (§13) |
 | 2 | new: `tradingagents/dataflows/kr/{__init__,cache,symbols,krx,dart,naver_news}.py`, `tradingagents/agents/utils/kr_tools.py`, `kr/collect_news.py`, `scripts/kr_samples.py`, `tests/kr/*`, `docs/kr_data_matrix.md`, `docs/samples/*` | Korean data layer | Phase 2 |
+| 2 | `.env.example` | Naver key comment: values come from NAVER API HUB (NCP console); legacy keys via `kr.naver_api="developers"` | Naver migrated the Search API to API HUB (new dev-center apps blocked since 2026-07-31) |

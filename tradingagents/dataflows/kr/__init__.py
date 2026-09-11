@@ -38,7 +38,8 @@ KR_DEFAULTS: dict = {
     "short_selling_days": 20,
     "market_overview_days": 20,
     "disclosure_lookback_days": 30,
-    # Naver news
+    # Naver news: "hub" = NAVER API HUB (NCP, current); "developers" = legacy developers.naver.com
+    "naver_api": "hub",
     "news_extra_keywords": [],          # appended to the company name query
     "news_pages": 3,                    # pages x 100 items per live query
     "global_news_queries": [

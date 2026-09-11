@@ -1,16 +1,30 @@
 {
-  "_note": "Shape per developers.naver.com/docs/serviceapi/search/news/news.md (fetched 2026-09-11); values illustrative, live capture pending credentials",
-  "lastBuildDate": "Fri, 11 Sep 2026 18:00:00 +0900",
-  "total": 12345,
+  "_note": "live NAVER API HUB response (search/v1/news), display=3, 2026-09-12",
+  "lastBuildDate": "Sat, 12 Sep 2026 00:29:28 +0900",
+  "total": 4460236,
   "start": 1,
-  "display": 1,
+  "display": 3,
   "items": [
     {
-      "title": "<b>삼성전자</b>, 3분기 실적 발표",
-      "originallink": "https://www.example-news.co.kr/article/1",
-      "link": "https://n.news.naver.com/mnews/article/000/0000001",
-      "description": "<b>삼성전자</b>가 3분기 실적을 발표했다 &amp; ...",
-      "pubDate": "Fri, 11 Sep 2026 17:30:00 +0900"
+      "title": "[분양 캘린더] 9월 셋째 주 1만602가구 청약 접수",
+      "originallink": "https://www.asiatime.co.kr/article/20260911500309",
+      "link": "https://www.asiatime.co.kr/article/20260911500309",
+      "description": "<b>삼성전자</b> 평택캠퍼스와 인접하며 이에 따른 대규모 배후수요 수혜가 기대된다. 또한, 고덕3초교(예정), 고덕6중교(예정), 민세초·중, 송탄고, 에듀타운이 가깝다. 지하철 1호선 서정리역, SRT 평택지제역, BRT(예정) 등... ",
+      "pubDate": "Sat, 12 Sep 2026 00:16:00 +0900"
+    },
+    {
+      "title": "추석 앞두고 청약시장 '들썩' … 9월 셋째주 전국 11곳서 1만602가구 공급",
+      "originallink": "http://www.worktoday.co.kr/news/articleView.html?idxno=89146",
+      "link": "http://www.worktoday.co.kr/news/articleView.html?idxno=89146",
+      "description": "A12블록 942가구, A65블록 837가구 등 총 1,779가구 규모로, 전 가구가 전용면적 84㎡ 단일평형으로 조성된다. <b>삼성전자</b> 평택캠퍼스와 인접하며 이에 따른 대규모 배후수요 수혜가 기대된다.",
+      "pubDate": "Sat, 12 Sep 2026 00:14:00 +0900"
+    },
+    {
+      "title": "[9월 셋째주 분양동향] 전국 1만602가구 분양…추석 앞두고 '매머드급 대...",
+      "originallink": "http://www.srtimes.kr/news/articleView.html?idxno=212241",
+      "link": "http://www.srtimes.kr/news/articleView.html?idxno=212241",
+      "description": "A12블록 942가구, A65블록 837가구 등 총 1,779가구 규모로 전 가구가 전용면적 84㎡ 단일 평형으로 공급되며 <b>삼성전자</b> 평택캠퍼스와 가깝다. 한편 서울 송파구 '힐스테이트 송파더그리드'는 10일 견본주택을 개관하고... ",
+      "pubDate": "Sat, 12 Sep 2026 00:06:00 +0900"
     }
   ]
 }

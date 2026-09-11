@@ -1,13 +1,20 @@
 """Naver News Search vendor with a local archive for backtests.
 
-Data source: ``GET https://openapi.naver.com/v1/search/news.json`` with headers
-``X-Naver-Client-Id`` / ``X-Naver-Client-Secret`` (env ``NAVER_CLIENT_ID`` /
-``NAVER_CLIENT_SECRET``). Parameters: ``query`` (UTF-8), ``display`` (10..100),
-``start`` (1..1000), ``sort`` (``sim`` | ``date``). Response: ``lastBuildDate``,
+Data source (default, ``kr.naver_api = "hub"``): NAVER API HUB on NAVER Cloud
+Platform — ``GET https://naverapihub.apigw.ntruss.com/search/v1/news`` with
+headers ``X-NCP-APIGW-API-KEY-ID`` / ``X-NCP-APIGW-API-KEY`` (env
+``NAVER_CLIENT_ID`` / ``NAVER_CLIENT_SECRET`` hold the API HUB Client ID/Secret).
+The legacy developers.naver.com endpoint (``kr.naver_api = "developers"``:
+``https://openapi.naver.com/v1/search/news.json`` with ``X-Naver-Client-Id`` /
+``X-Naver-Client-Secret``) is kept for keys issued before 2026-07-31; it fades
+out on 2027-06-30 per Naver's migration notice.
+
+Both share the same contract: parameters ``query`` (UTF-8), ``display`` (1..100),
+``start`` (1..1000), ``sort`` (``sim`` | ``date``); response ``lastBuildDate``,
 ``total``, ``start``, ``display``, ``items[]`` with ``title``, ``originallink``,
 ``link``, ``description`` (HTML ``<b>`` highlights, entities) and ``pubDate``
 (RFC 822, e.g. ``Mon, 26 Sep 2016 07:50:00 +0900``). Errors: SE01..SE06 (400),
-024 (401 auth), 429 (quota). Daily quota: 25,000 calls across the search APIs.
+401 auth, 429 quota, SE99 (500). Daily quota: 25,000 calls.
 
 Constraint: there is no date filter and at most 1,000 results per query, so
 past news cannot be queried live. Every live result is appended to the
@@ -44,7 +51,14 @@ from .symbols import get_ticker_name, normalize_kr_symbol
 
 logger = logging.getLogger(__name__)
 
-NAVER_NEWS_URL = "https://openapi.naver.com/v1/search/news.json"
+NAVER_ENDPOINTS = {
+    # NAVER API HUB (NAVER Cloud Platform) — current
+    "hub": ("https://naverapihub.apigw.ntruss.com/search/v1/news",
+            ("X-NCP-APIGW-API-KEY-ID", "X-NCP-APIGW-API-KEY")),
+    # developers.naver.com — legacy, fade-out 2027-06-30
+    "developers": ("https://openapi.naver.com/v1/search/news.json",
+                   ("X-Naver-Client-Id", "X-Naver-Client-Secret")),
+}
 _TAG_RE = re.compile(r"<[^>]+>")
 
 _ARCHIVE_SCHEMA = """
@@ -84,27 +98,38 @@ def _credentials() -> tuple[str, str]:
     cid, secret = os.environ.get("NAVER_CLIENT_ID"), os.environ.get("NAVER_CLIENT_SECRET")
     if not cid or not secret:
         raise VendorNotConfiguredError(
-            "NAVER_CLIENT_ID / NAVER_CLIENT_SECRET are not set (register an app at developers.naver.com)."
+            "NAVER_CLIENT_ID / NAVER_CLIENT_SECRET are not set (issue an API key under "
+            "NAVER Cloud Platform > NAVER API HUB, or a legacy developers.naver.com app)."
         )
     return cid, secret
+
+
+def endpoint() -> tuple[str, tuple[str, str]]:
+    """(url, (id_header, secret_header)) for the configured ``kr.naver_api`` flavour."""
+    mode = str(kr_setting("naver_api")).lower()
+    if mode not in NAVER_ENDPOINTS:
+        raise ValueError(f"kr.naver_api must be one of {sorted(NAVER_ENDPOINTS)}, got {mode!r}")
+    return NAVER_ENDPOINTS[mode]
 
 
 def search_news(query: str, display: int = 100, start: int = 1, sort: str = "date") -> dict:
     """One raw API call (throttled, retried on network errors; 429 raises VendorRateLimitError)."""
     cid, secret = _credentials()
+    url, (id_header, secret_header) = endpoint()
 
     def call():
         resp = requests.get(
-            NAVER_NEWS_URL,
-            params={"query": query, "display": min(max(display, 10), 100), "start": min(max(start, 1), 1000),
+            url,
+            params={"query": query, "display": min(max(display, 1), 100), "start": min(max(start, 1), 1000),
                     "sort": sort},
-            headers={"X-Naver-Client-Id": cid, "X-Naver-Client-Secret": secret},
+            headers={id_header: cid, secret_header: secret},
             timeout=20,
         )
         if resp.status_code == 429:
             raise VendorRateLimitError("Naver search API quota exceeded (429)")
-        if resp.status_code == 401:
-            raise VendorNotConfiguredError(f"Naver API rejected the credentials: {resp.text[:200]}")
+        if resp.status_code in (401, 403):
+            raise VendorNotConfiguredError(
+                f"Naver API rejected the credentials ({resp.status_code}) for {url}: {resp.text[:200]}")
         resp.raise_for_status()
         return resp.json()
 
@@ -270,5 +295,5 @@ def get_global_news(
                            f"{', '.join(queries)}):", limit)
 
 
-__all__ = ["search_news", "collect", "archive_upsert", "archive_query", "clean_text", "parse_pubdate",
+__all__ = ["search_news", "endpoint", "NAVER_ENDPOINTS", "collect", "archive_upsert", "archive_query", "clean_text", "parse_pubdate",
            "get_news", "get_global_news", "ticker_query"]

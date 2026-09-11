@@ -56,24 +56,31 @@ pending (credential error 024 on the supplied secret).
   is filed later, its `rcept_no` replaces the original and the report is
   withheld until the correction date in backtests (conservative).
 
-## Naver News Search (openapi.naver.com, `NAVER_CLIENT_ID` / `NAVER_CLIENT_SECRET`)
+## Naver News Search (NAVER API HUB, `NAVER_CLIENT_ID` / `NAVER_CLIENT_SECRET`)
 
-| Item | Value |
-|---|---|
-| Endpoint | `GET https://openapi.naver.com/v1/search/news.json` |
-| Headers | `X-Naver-Client-Id`, `X-Naver-Client-Secret` |
-| Params | `query` (UTF-8), `display` 10–100, `start` 1–1000, `sort` `sim`/`date` |
-| Response | `lastBuildDate`, `total`, `start`, `display`, `items[]{title, originallink, link, description, pubDate}`; `<b>` highlights + HTML entities are stripped; `pubDate` RFC 822 (`+0900`) |
-| Errors | `SE01`–`SE06` (400 bad params), `024` (401 auth), 429 quota |
-| Quota | 25,000 calls/day across all search APIs |
-| Constraint | no date filter, max 1,000 results/query → history is only available from the local archive |
+Naver is migrating the Search API from developers.naver.com to **NAVER API HUB**
+(NAVER Cloud Platform): API HUB launched 2026-06-25, new developer-center
+applications blocked from 2026-07-31, developer-center support ends 2027-06-30.
+New keys therefore come from the NCP console (NAVER API HUB) and use the API
+Gateway headers.
+
+| Item | API HUB (default, `kr.naver_api="hub"`) | Legacy (`kr.naver_api="developers"`) |
+|---|---|---|
+| Endpoint | `GET https://naverapihub.apigw.ntruss.com/search/v1/news` | `GET https://openapi.naver.com/v1/search/news.json` |
+| Headers | `X-NCP-APIGW-API-KEY-ID`, `X-NCP-APIGW-API-KEY` | `X-Naver-Client-Id`, `X-Naver-Client-Secret` |
+| Params | `query` (UTF-8), `display` 1–100, `start` 1–1000, `sort` `sim`/`date`, `format` json/xml | same (no `format`) |
+| Response | `lastBuildDate`, `total`, `start`, `display`, `items[]{title, originallink, link, description, pubDate}`; `<b>` highlights + entities stripped; `pubDate` RFC 822 (`+0900`) | same |
+| Errors | `SE01`–`SE06` (400), 401 auth, 403 non-HTTPS, 429 quota, `SE99`/500 | `SE01`–`SE06`, `024` (401), 429 |
+| Quota | 25,000 calls/day per account | 25,000/day |
+| Constraint | no date filter, max 1,000 results/query → history only from the local archive | same |
 
 - Live mode: fetch `kr.news_pages` (3) pages sorted by date, upsert into
   `news_archive`, then filter to `[start_date, end_date]` with the shared
   `date_window.in_window` rule. Backtest mode (`kr.backtest_mode` or a window
   older than 30 days): archive only, and an explicit "해당 기간 뉴스 데이터 없음(백테스트 제약)".
 - `kr/collect_news.py` runs daily for the watchlist and the macro queries.
-- Live verification pending: the supplied secret returned `024` (see Phase 2 report).
+- Sources: NAVER API HUB overview and 뉴스 검색 결과 조회 guides at api.ncloud-docs.com
+  (`naver-api-hub-overview`, `naver-api-hub-search-news`).
 
 ## Telegram (`TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHAT_ID`)
 

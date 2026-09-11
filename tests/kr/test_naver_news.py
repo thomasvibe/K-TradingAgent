@@ -71,3 +71,41 @@ def test_missing_credentials(kr_env, monkeypatch):
     monkeypatch.delenv("NAVER_CLIENT_ID", raising=False)
     with pytest.raises(VendorNotConfiguredError):
         nn.search_news("x")
+
+
+@pytest.mark.unit
+def test_endpoint_selection_defaults_to_api_hub(kr_env, monkeypatch):
+    url, headers = nn.endpoint()
+    assert url == "https://naverapihub.apigw.ntruss.com/search/v1/news"
+    assert headers == ("X-NCP-APIGW-API-KEY-ID", "X-NCP-APIGW-API-KEY")
+    set_config({"kr": {"naver_api": "developers"}})
+    url, headers = nn.endpoint()
+    assert url == "https://openapi.naver.com/v1/search/news.json"
+    assert headers == ("X-Naver-Client-Id", "X-Naver-Client-Secret")
+
+
+@pytest.mark.unit
+def test_search_news_sends_hub_headers(kr_env, monkeypatch):
+    monkeypatch.setenv("NAVER_CLIENT_ID", "id")
+    monkeypatch.setenv("NAVER_CLIENT_SECRET", "secret")
+    seen = {}
+
+    class Resp:
+        status_code = 200
+        text = ""
+
+        def raise_for_status(self):
+            pass
+
+        def json(self):
+            return {"items": []}
+
+    def fake_get(url, params=None, headers=None, timeout=None):
+        seen.update(url=url, params=params, headers=headers)
+        return Resp()
+
+    monkeypatch.setattr(nn.requests, "get", fake_get)
+    nn.search_news("삼성전자", display=100, start=1, sort="date")
+    assert seen["url"].startswith("https://naverapihub.apigw.ntruss.com/")
+    assert seen["headers"] == {"X-NCP-APIGW-API-KEY-ID": "id", "X-NCP-APIGW-API-KEY": "secret"}
+    assert seen["params"] == {"query": "삼성전자", "display": 100, "start": 1, "sort": "date"}
