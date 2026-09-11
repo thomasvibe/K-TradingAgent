@@ -64,3 +64,18 @@ def test_purge_older_than(kr_env):
     c.connect().execute("UPDATE api_cache SET created_at = ?", (time.time() - 10 * 86400,))
     c.connect().commit()
     assert c.purge_older_than(5) == 1
+
+
+@pytest.mark.unit
+def test_cache_is_safe_across_threads(kr_env):
+    """LangGraph runs parallel tool calls on worker threads; the cache must not share a connection."""
+    from concurrent.futures import ThreadPoolExecutor
+
+    def work(i):
+        cache.cached_json("thr", [i % 4], lambda: {"i": i}, ttl=None)
+        return cache.KrCache.instance().get(f"thr:{i % 4}") is not None
+
+    with ThreadPoolExecutor(max_workers=8) as pool:
+        results = list(pool.map(work, range(64)))
+    assert all(results)
+    assert len(cache.KrCache.instance()._conns) >= 2

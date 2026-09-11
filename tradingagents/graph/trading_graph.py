@@ -30,6 +30,7 @@ from tradingagents.agents.utils.agent_utils import (
 )
 from tradingagents.agents.utils.memory import TradingMemoryLog
 from tradingagents.dataflows.config import set_config
+from tradingagents.dataflows.kr import is_kr_market  # KR
 from tradingagents.dataflows.utils import safe_ticker_component
 from tradingagents.default_config import DEFAULT_CONFIG
 from tradingagents.llm_clients import create_llm_client
@@ -209,6 +210,11 @@ class TradingAgentsGraph:
 
     def _create_tool_nodes(self) -> dict[str, ToolNode]:
         """Create tool nodes for different data sources using abstract methods."""
+        # KR: the analysts bind kr_toolsets(); the ToolNodes must match exactly.
+        if is_kr_market():
+            from tradingagents.agents.utils.kr_tools import kr_toolsets
+
+            return {key: ToolNode(tools) for key, tools in kr_toolsets().items()}
         return {
             "market": ToolNode(
                 [
@@ -263,6 +269,11 @@ class TradingAgentsGraph:
         explicit = self.config.get("benchmark_ticker")
         if explicit:
             return explicit
+        # KR: KOSPI (1001) / KOSDAQ (2001) index code via pykrx membership.
+        if is_kr_market():
+            from tradingagents.dataflows.kr.symbols import benchmark_index
+
+            return benchmark_index(ticker)
         benchmark_map = self.config.get("benchmark_map", {})
         ticker_upper = ticker.upper()
         for suffix, benchmark in benchmark_map.items():
@@ -271,7 +282,7 @@ class TradingAgentsGraph:
         return benchmark_map.get("", "SPY")
 
     def _fetch_returns(
-        self, ticker: str, trade_date: str, holding_days: int = 5,
+        self, ticker: str, trade_date: str, holding_days: int | None = None,
         benchmark: str = "SPY",
     ) -> tuple[float | None, float | None, int | None, str | None]:
         """Fetch raw and alpha return for ticker over holding_days from trade_date.
@@ -285,6 +296,13 @@ class TradingAgentsGraph:
         or unreachable.
         """
         from tradingagents.dataflows.symbol_utils import normalize_symbol
+
+        # KR: holding window comes from config (was hardcoded 5); KR prices from pykrx.
+        if holding_days is None:
+            cfg = getattr(self, "config", None) or {}
+            holding_days = int(cfg.get("reflection_holding_days", 5) or 5)
+        if is_kr_market():
+            return self._fetch_returns_kr(ticker, trade_date, holding_days, benchmark)
 
         try:
             start = datetime.strptime(trade_date, "%Y-%m-%d")
@@ -323,6 +341,31 @@ class TradingAgentsGraph:
             )
             return None, None, None, None
 
+    def _fetch_returns_kr(
+        self, ticker: str, trade_date: str, holding_days: int, benchmark: str,
+    ) -> tuple[float | None, float | None, int | None, str | None]:
+        """KR: realized return vs. the KOSPI/KOSDAQ index from pykrx (same contract as above)."""
+        from tradingagents.dataflows.kr.krx import fetch_ohlcv, get_index_close
+        from tradingagents.dataflows.kr.symbols import normalize_kr_symbol
+
+        try:
+            end = datetime.strptime(trade_date, "%Y-%m-%d") + timedelta(days=holding_days * 2 + 10)
+            end_str = end.strftime("%Y-%m-%d")
+            stock = fetch_ohlcv(normalize_kr_symbol(ticker), trade_date, end_str)["Close"]
+            bench = get_index_close(benchmark, trade_date, end_str)
+            if len(stock) <= holding_days or len(bench) <= holding_days:
+                return None, None, None, None
+            raw = float(stock.iloc[holding_days] / stock.iloc[0] - 1)
+            bench_ret = float(bench.iloc[holding_days] / bench.iloc[0] - 1)
+            resolution_date = stock.index[holding_days].strftime("%Y-%m-%d")
+            return raw, raw - bench_ret, holding_days, resolution_date
+        except Exception as e:  # noqa: BLE001 — pending entry retried next run
+            logger.warning(
+                "Could not resolve KR outcome for %s on %s vs %s (will retry next run): %s",
+                ticker, trade_date, benchmark, e,
+            )
+            return None, None, None, None
+
     def _resolve_pending_entries(self, ticker: str) -> None:
         """Resolve pending log entries for ticker at the start of a new run.
 
@@ -338,6 +381,8 @@ class TradingAgentsGraph:
             return
 
         benchmark = self._resolve_benchmark(ticker)
+        # KR: label the index for the reflection prompt ("Alpha vs KOSPI(1001)").
+        benchmark_label = {"1001": "KOSPI(1001)", "2001": "KOSDAQ(2001)"}.get(benchmark, benchmark)
         updates = []
         for entry in pending:
             raw, alpha, days, resolution_date = self._fetch_returns(
@@ -349,7 +394,7 @@ class TradingAgentsGraph:
                 final_decision=entry.get("decision", ""),
                 raw_return=raw,
                 alpha_return=alpha,
-                benchmark_name=benchmark,
+                benchmark_name=benchmark_label,
             )
             updates.append({
                 "ticker": ticker,

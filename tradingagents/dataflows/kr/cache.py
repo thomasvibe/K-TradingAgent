@@ -10,6 +10,7 @@ between external calls and ``with_retry()`` applies exponential backoff.
 
 from __future__ import annotations
 
+import contextlib
 import json
 import logging
 import os
@@ -49,8 +50,12 @@ def cache_db_path() -> str:
 class KrCache:
     """Thin SQLite key/value store with TTL, shared by all KR modules.
 
-    One instance per DB path; ``connect()`` hands out a connection for modules
-    that keep their own tables (news archive, DART corp codes) in the same file.
+    One instance per DB path with **one connection per thread**: LangGraph's
+    ToolNode runs parallel tool calls on worker threads, and a single sqlite3
+    connection used from several threads raises ``InterfaceError``. WAL mode lets
+    readers proceed while a writer commits; a 30 s busy timeout covers the rest.
+    ``connect()`` hands out the calling thread's connection for modules that keep
+    their own tables (news archive, DART corp codes) in the same file.
     """
 
     _instances: dict[str, KrCache] = {}
@@ -58,10 +63,10 @@ class KrCache:
 
     def __init__(self, path: str) -> None:
         self.path = path
-        self._conn = sqlite3.connect(path, check_same_thread=False)
-        self._conn.execute("PRAGMA journal_mode=WAL")
-        self._conn.executescript(_SCHEMA)
-        self._conn.commit()
+        self._local = threading.local()
+        self._conns: list[sqlite3.Connection] = []
+        self._write_lock = threading.RLock()
+        self.connect()  # create schema eagerly on the creating thread
 
     @classmethod
     def instance(cls, path: str | None = None) -> KrCache:
@@ -75,14 +80,30 @@ class KrCache:
 
     @classmethod
     def reset(cls) -> None:
-        """Close every open instance (tests)."""
+        """Close every open connection of every instance (tests)."""
         with cls._lock:
             for inst in cls._instances.values():
-                inst._conn.close()
+                for conn in inst._conns:
+                    with contextlib.suppress(Exception):
+                        conn.close()
+                inst._conns.clear()
             cls._instances.clear()
 
     def connect(self) -> sqlite3.Connection:
-        return self._conn
+        conn = getattr(self._local, "conn", None)
+        if conn is None:
+            conn = sqlite3.connect(self.path, timeout=30, check_same_thread=False)
+            conn.execute("PRAGMA journal_mode=WAL")
+            conn.executescript(_SCHEMA)
+            conn.commit()
+            self._local.conn = conn
+            with self._write_lock:
+                self._conns.append(conn)
+        return conn
+
+    @property
+    def _conn(self) -> sqlite3.Connection:
+        return self.connect()
 
     def get(self, key: str) -> str | None:
         row = self._conn.execute(
@@ -98,7 +119,7 @@ class KrCache:
     def set(self, key: str, source: str, payload: str, ttl: float | None) -> None:
         now = time.time()
         expires = None if ttl is None else now + ttl
-        with self._lock:
+        with self._write_lock:
             self._conn.execute(
                 "INSERT OR REPLACE INTO api_cache(cache_key, source, created_at, expires_at, payload) "
                 "VALUES (?, ?, ?, ?, ?)",
@@ -107,7 +128,7 @@ class KrCache:
             self._conn.commit()
 
     def purge_expired(self) -> int:
-        with self._lock:
+        with self._write_lock:
             cur = self._conn.execute(
                 "DELETE FROM api_cache WHERE expires_at IS NOT NULL AND expires_at < ?", (time.time(),)
             )
@@ -117,7 +138,7 @@ class KrCache:
     def purge_older_than(self, days: float, source: str | None = None) -> int:
         """Drop cached raw responses older than ``days`` (cache size management)."""
         cutoff = time.time() - days * 86400
-        with self._lock:
+        with self._write_lock:
             if source:
                 cur = self._conn.execute(
                     "DELETE FROM api_cache WHERE created_at < ? AND source = ?", (cutoff, source)

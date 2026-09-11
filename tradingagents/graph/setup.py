@@ -21,6 +21,7 @@ from tradingagents.agents import (
     create_trader,
 )
 from tradingagents.agents.utils.agent_states import AgentState
+from tradingagents.dataflows.kr import is_kr_market  # KR
 
 from .analyst_execution import build_analyst_execution_plan
 from .conditional_logic import ConditionalLogic
@@ -78,6 +79,19 @@ class GraphSetup:
             "news": lambda: create_news_analyst(self.quick_thinking_llm),
             "fundamentals": lambda: create_fundamentals_analyst(self.quick_thinking_llm),
         }
+        # KR: Korean-market analysts (Naver/KRX/DART data; no StockTwits/Reddit/FRED/Polymarket).
+        if is_kr_market():
+            from tradingagents.agents.kr_analysts import (
+                create_kr_fundamentals_analyst,
+                create_kr_news_analyst,
+                create_kr_sentiment_analyst,
+            )
+
+            analyst_factories.update({
+                "social": lambda: create_kr_sentiment_analyst(self.quick_thinking_llm),
+                "news": lambda: create_kr_news_analyst(self.quick_thinking_llm),
+                "fundamentals": lambda: create_kr_fundamentals_analyst(self.quick_thinking_llm),
+            })
 
         # Create researcher and manager nodes
         bull_researcher_node = create_bull_researcher(self.quick_thinking_llm)

@@ -1,6 +1,6 @@
 """LangChain callback handler that records per-node LLM/tool timing and token usage.
 
-KR: Phase 1 measurement helper (not part of upstream). Attach via the graph
+KR: measurement helper used by scripts/ and kr/run.py (not part of upstream). Attach via the graph
 ``config["callbacks"]`` so it sees LangGraph node chain events *and* the LLM /
 tool events that run inside them. LangGraph stamps ``langgraph_node`` into the
 run metadata, which is how each LLM call is attributed to a node.

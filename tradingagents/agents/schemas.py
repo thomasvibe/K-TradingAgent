@@ -18,6 +18,7 @@ so that:
 
 from __future__ import annotations
 
+import re
 from enum import Enum
 from typing import Literal
 
@@ -28,6 +29,11 @@ from pydantic import BaseModel, Field, field_validator
 # call validates instead of erroring (#1058). Pydantic still parses real numeric
 # strings ("189.5") to float.
 _NULLISH_FLOAT = {"", "none", "n/a", "na", "null", "nil", "-", "tbd", "unknown"}
+
+# KR: Korean price strings. A scaled unit (만원 = 10,000 won, 억원, 천원) is ambiguous
+# without a unit guess, so it is dropped like a percentage; plain won markers are stripped.
+_KR_SCALED_UNIT_RE = re.compile(r"(만\s*원|억\s*원|천\s*원|만원|억원|천원)")
+_KR_UNIT_RE = re.compile(r"(?i)(krw|₩|원)")
 
 
 def _coerce_optional_float(value):
@@ -46,7 +52,11 @@ def _coerce_optional_float(value):
     text = value.strip()
     if text.lower() in _NULLISH_FLOAT or text.endswith("%"):
         return None
-    cleaned = text.replace(",", "").lstrip("$€£¥").strip()
+    # KR: "만원"/"억원"/"천원" need a unit guess we refuse to make -> None (#spec §8-8).
+    if _KR_SCALED_UNIT_RE.search(text):
+        return None
+    # KR: strip won markers ("71,500원", "₩71500", "KRW 71500") along with the upstream symbols.
+    cleaned = _KR_UNIT_RE.sub("", text.replace(",", "")).strip().lstrip("$€£¥₩").strip()
     return cleaned or None
 
 
@@ -156,7 +166,8 @@ class TraderProposal(BaseModel):
         default=None,
         description=(
             "Optional entry price target as an absolute number in the instrument's "
-            "quote currency (e.g. 189.5), never a percentage or a range. Omit it "
+            "quote currency (e.g. 189.5 for a USD stock, 71500 for a KRW stock), never a "  # KR
+            "percentage or a range. Omit it "
             "if you cannot state a specific level."
         ),
     )
@@ -164,7 +175,7 @@ class TraderProposal(BaseModel):
         default=None,
         description=(
             "Optional stop-loss as an absolute price in the instrument's quote "
-            "currency (e.g. 172.0), never a percentage. Convert a percentage "
+            "currency (e.g. 172.0 for USD, 68000 for KRW), never a percentage. Convert a percentage "  # KR
             "distance to the price level it implies, or omit it."
         ),
     )
@@ -242,7 +253,10 @@ class PortfolioDecision(BaseModel):
     )
     price_target: float | None = Field(
         default=None,
-        description="Optional target price in the instrument's quote currency.",
+        description=(
+            "Optional target price as an absolute number in the instrument's quote "
+            "currency (e.g. 210.0 for USD, 82000 for KRW); no unit suffix."  # KR
+        ),
     )
     time_horizon: str | None = Field(
         default=None,

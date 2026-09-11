@@ -24,14 +24,12 @@ import sys
 import time
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parent))
-from llm_stats import FallbackCounter, NodeStatsHandler, discover_model_id  # noqa: E402
-
-from tradingagents.agents.managers.portfolio_manager import create_portfolio_manager  # noqa: E402
-from tradingagents.agents.managers.research_manager import create_research_manager  # noqa: E402
-from tradingagents.agents.trader.trader import create_trader  # noqa: E402
-from tradingagents.graph.signal_processing import SignalProcessor  # noqa: E402
-from tradingagents.llm_clients import create_llm_client  # noqa: E402
+from kr.llm_stats import FallbackCounter, NodeStatsHandler, discover_model_id
+from tradingagents.agents.managers.portfolio_manager import create_portfolio_manager
+from tradingagents.agents.managers.research_manager import create_research_manager
+from tradingagents.agents.trader.trader import create_trader
+from tradingagents.graph.signal_processing import SignalProcessor
+from tradingagents.llm_clients import create_llm_client
 
 # Minimal but realistic state for the three agents (same as upstream smoke).
 DEBATE_HISTORY = """

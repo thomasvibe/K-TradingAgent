@@ -62,3 +62,38 @@ def get_disclosures(
     also works in backtests.
     """
     return route_to_vendor("get_disclosures", ticker, curr_date, look_back_days)
+
+
+@tool
+def get_insider_transactions(
+    ticker: Annotated[str, "6-digit Korean stock code, e.g. 005930"],
+    curr_date: Annotated[str, "The current trading date, YYYY-mm-dd"],
+) -> str:
+    """
+    Executive / major-shareholder ownership reports (임원·주요주주 소유보고) and 5%-holder
+    reports (대량보유 상황보고) from DART, received on or before curr_date. Point-in-time
+    replacement for the US insider-transactions tool.
+    """
+    return route_to_vendor("get_insider_transactions", ticker, curr_date)
+
+
+def kr_toolsets() -> dict[str, list]:
+    """Tool lists per analyst key in KR mode. Single source for analysts and ToolNodes."""
+    from tradingagents.agents.utils.agent_utils import (
+        get_balance_sheet,
+        get_cashflow,
+        get_fundamentals,
+        get_global_news,
+        get_income_statement,
+        get_indicators,
+        get_news,
+        get_stock_data,
+        get_verified_market_snapshot,
+    )
+
+    return {
+        "market": [get_stock_data, get_indicators, get_verified_market_snapshot],
+        "social": [get_news],  # sentiment analyst pre-fetches; node kept for graph shape
+        "news": [get_news, get_global_news, get_disclosures, get_insider_transactions, get_market_overview],
+        "fundamentals": [get_fundamentals, get_balance_sheet, get_cashflow, get_income_statement],
+    }

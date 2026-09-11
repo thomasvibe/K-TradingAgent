@@ -82,6 +82,9 @@ DEFAULT_CONFIG = _apply_env_overrides({
     # KR: market switch. "KR" routes OHLCV/identity/reflection to the Korean data
     # layer (tradingagents/dataflows/kr) and disables US-only sources.
     "market": "US",
+    # KR: holding window (trading days) used to settle a decision for the reflection
+    # memory. Was hardcoded as 5 in TradingAgentsGraph._fetch_returns.
+    "reflection_holding_days": 5,
     # LLM settings
     "llm_provider": "openai",
     "deep_think_llm": "gpt-5.6",

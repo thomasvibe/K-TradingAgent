@@ -43,6 +43,7 @@ __all__ = [
     "resolve_instrument_identity",
     "get_instrument_context_from_state",
     "get_language_instruction",
+    "get_price_example",  # KR
     "create_msg_delete",
 ]
 
@@ -63,6 +64,14 @@ def get_language_instruction() -> str:
     if lang.strip().lower() == "english":
         return ""
     return f" Write your entire response in {lang}."
+
+
+def get_price_example() -> str:
+    """Example absolute price for prompts: KRW integer in KR mode, else the upstream USD example."""
+    # KR: Korean quotes are whole won (e.g. 71500), so a "189.5"-style example misleads the model.
+    from tradingagents.dataflows.kr import is_kr_market
+
+    return "71500" if is_kr_market() else "189.5"
 
 
 def opponent_argument_or_opening(text: str, opponent: str) -> str:
@@ -107,7 +116,14 @@ def resolve_instrument_identity(ticker: str) -> dict:
     The symbol is normalized first (e.g. ``XAUUSD`` -> ``GC=F``) so identity
     resolves for the same instrument the price path actually fetches (#983).
     """
+    # KR: pykrx name/market/sector + DART profile instead of Yahoo (fail-open too).
+    from tradingagents.dataflows.kr import is_kr_market
     from tradingagents.dataflows.symbol_utils import normalize_symbol
+
+    if is_kr_market():
+        from tradingagents.dataflows.kr.identity import resolve_kr_identity
+
+        return resolve_kr_identity(ticker)
 
     try:
         info = yf.Ticker(normalize_symbol(ticker)).info or {}
