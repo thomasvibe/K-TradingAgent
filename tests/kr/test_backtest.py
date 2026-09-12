@@ -115,7 +115,7 @@ def test_results_db_resume_and_jobs(tmp_path):
 
 
 @pytest.mark.unit
-def test_run_job_extracts_fields_with_fake_graph():
+def test_run_job_extracts_fields_with_fake_graph(monkeypatch):
     class FakeProp:
         def get_graph_args(self, callbacks=None):
             return {"config": {"callbacks": callbacks or []}}
@@ -129,6 +129,7 @@ def test_run_job_extracts_fields_with_fake_graph():
                      "news_report": "해당 기간 뉴스 데이터 없음(백테스트 제약)", "sentiment_report": ""}
             return state, "Overweight"
 
+    monkeypatch.setattr(bt, "news_available_for", lambda t, d, lookback_days=7: False)
     row = bt.run_job(FakeGraph(), bt.Job("005930", "2025-01-03"), "t", "m")
     assert (row["rating"], row["trader_action"], row["entry_price"], row["stop_loss"], row["price_target"]) == (
         "Overweight", "Buy", 71500.0, 68000.0, 82000.0)
@@ -142,3 +143,14 @@ def test_null_memory_and_estimate():
     assert "24 runs x 1100 s = 7.3 h" in bt.estimate_text(24, 1100)
     with pytest.raises(ValueError):
         bt.parse_universe("bottom:5", "2025-01-01")
+
+
+@pytest.mark.unit
+def test_news_available_for_uses_archive(kr_env):
+    from tradingagents.dataflows.kr import naver_news as nn
+
+    assert bt.news_available_for("005930", "2025-09-11") is False
+    nn.archive_upsert("삼성전자", [{"title": "t", "originallink": "https://a/1", "link": "https://a/1",
+                                  "description": "d", "pubDate": "Wed, 10 Sep 2025 09:00:00 +0900"}])
+    assert bt.news_available_for("005930", "2025-09-11") is True
+    assert bt.news_available_for("005930", "2025-08-11") is False  # outside the 7-day window

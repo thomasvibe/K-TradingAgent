@@ -140,6 +140,19 @@ def _num(v):
         return None
 
 
+def news_available_for(ticker: str, trade_date: str, lookback_days: int = 7) -> bool | None:
+    """Deterministic news-coverage flag: does the local Naver archive hold any article in the
+    sentiment window ``[trade_date - lookback, trade_date]``? None when the lookup itself fails."""
+    try:
+        from tradingagents.dataflows.kr.naver_news import archive_query, ticker_query
+
+        start = (pd.Timestamp(trade_date) - pd.DateOffset(days=lookback_days)).strftime("%Y-%m-%d")
+        return bool(archive_query(ticker_query(ticker), start, trade_date))
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("news availability lookup failed for %s %s: %s", ticker, trade_date, exc)
+        return None
+
+
 def run_job(graph, job: Job, run_id: str, model: str) -> dict:
     handler = NodeStatsHandler()
     counter = FallbackCounter().attach()
@@ -155,13 +168,16 @@ def run_job(graph, job: Job, run_id: str, model: str) -> dict:
     pm = final_state.get("final_trade_decision", "") or ""
     trader = final_state.get("trader_investment_plan", "") or ""
     news = (final_state.get("news_report", "") or "") + (final_state.get("sentiment_report", "") or "")
+    available = news_available_for(job.ticker, job.trade_date)
+    if available is None:  # archive unreadable: fall back to the report text
+        available = "뉴스 데이터 없음" not in news
     totals = handler.totals()
     return {
         "run_id": run_id, "ticker": job.ticker, "trade_date": job.trade_date, "repeat_idx": job.repeat_idx,
         "rating": signal if signal in RATINGS else None, "trader_action": extract_field(trader, "trader_action"),
         "entry_price": _num(extract_field(trader, "entry_price")), "stop_loss": _num(extract_field(trader, "stop_loss")),
         "price_target": _num(extract_field(pm, "price_target")), "time_horizon": extract_field(pm, "time_horizon"),
-        "signal_is_review": int(signal not in RATINGS), "news_available": int("뉴스 데이터 없음" not in news),
+        "signal_is_review": int(signal not in RATINGS), "news_available": int(available),
         "run_seconds": round(seconds, 1), "tokens_in": totals["input_tokens"], "tokens_out": totals["output_tokens"],
         "model": model, "created_at": pd.Timestamp.now().isoformat(timespec="seconds"), "error": None,
         "fallbacks": len(counter.fallbacks),
@@ -188,6 +204,10 @@ def estimate_text(n_jobs: int, seconds_per_run: float) -> str:
 
 def _pct(v) -> str:
     return "n/a" if v is None or pd.isna(v) else f"{v * 100:+.2f}%"
+
+
+def _share(v) -> str:
+    return "n/a" if v is None or pd.isna(v) else f"{v * 100:.1f}%"
 
 
 def load_prices(tickers: list[str], start: str, end: str, max_horizon: int) -> tuple[dict, dict, dict]:
@@ -221,8 +241,8 @@ def write_report(run_dir: Path, args, decisions: pd.DataFrame, outcomes: pd.Data
         f"- period: {args.start} → {args.end} ({args.freq}); tickers: {', '.join(sorted(decisions['ticker'].unique()))}",
         f"- horizons (trading days): {args.horizons}; cost {args.cost_bps} bps round trip; memory {args.memory}; "
         f"repeat {args.repeat}",
-        f"- decisions: {dist['total']} (Hold share {_pct(dist['hold_share'])}, REVIEW {dist['review']} = "
-        f"{_pct(dist['review_share'])}); runs without news archive coverage: {summary['news_gap']['n_without_news']}",
+        f"- decisions: {dist['total']} (Hold share {_share(dist['hold_share'])}, REVIEW {dist['review']} = "
+        f"{_share(dist['review_share'])}); runs without news archive coverage: {summary['news_gap']['n_without_news']}",
         "- **survivorship caveat**: a ticker list chosen today is biased toward survivors; use "
         "`--universe top-mcap:N` to pick the universe by market cap as of the start date.",
         "",
@@ -238,8 +258,8 @@ def write_report(run_dir: Path, args, decisions: pd.DataFrame, outcomes: pd.Data
     ]
     for _, r in summary["performance"].iterrows():
         lines.append(f"| {r['rating']} | {r['horizon']} | {r['n']} | {_pct(r['mean_ret'])} | {_pct(r['median_ret'])} | "
-                     f"{_pct(r['mean_excess'])} | {_pct(r['median_excess'])} | {_pct(r['win_rate'])} | "
-                     f"{_pct(r['excess_win_rate'])} |")
+                     f"{_pct(r['mean_excess'])} | {_pct(r['median_excess'])} | {_share(r['win_rate'])} | "
+                     f"{_share(r['excess_win_rate'])} |")
     lines += ["", "## Monotonicity (Spearman, rating rank vs excess return)", "",
               "| h | n | rho | p |", "|---:|---:|---:|---:|"]
     for mo in summary["monotonicity"]:
@@ -255,10 +275,10 @@ def write_report(run_dir: Path, args, decisions: pd.DataFrame, outcomes: pd.Data
     lines += ["", "## Stop-loss touched within the holding window", "", "| h | n with stop | touch rate |",
               "|---:|---:|---:|"]
     for st in summary["stop_touch"]:
-        lines.append(f"| {st['horizon']} | {st['n_with_stop']} | {_pct(st['touch_rate'])} |")
+        lines.append(f"| {st['horizon']} | {st['n_with_stop']} | {_share(st['touch_rate'])} |")
     rep = summary["repeat"]
     if rep["groups"]:
-        lines += ["", f"## Repeat agreement: {_pct(rep['agreement'])} of {rep['groups']} (ticker, date) groups agree"]
+        lines += ["", f"## Repeat agreement: {_share(rep['agreement'])} of {rep['groups']} (ticker, date) groups agree"]
     if "split" in summary:
         sp = summary["split"]
         lines += ["", f"## Split at {sp['split_date']}: pre n={sp['pre_n']}, post n={sp['post_n']}", ""]
@@ -310,7 +330,7 @@ def plot_equity(summary: dict, run_dir: Path) -> Path | None:
 def telegram_summary(args, summary: dict) -> str:
     dist = summary["distribution"]
     lines = [f"[TradingAgents-KR] 백테스트 {args.run_id} ({args.start}~{args.end})",
-             f"판정 {dist['total']}건 · Hold {_pct(dist['hold_share'])} · REVIEW {dist['review']}"]
+             f"판정 {dist['total']}건 · Hold {_share(dist['hold_share'])} · REVIEW {dist['review']}"]
     for h, s in summary["strategies"].items():
         lines.append(f"h={h}: 전략 {_pct(s.total_return)} (MDD {_pct(s.max_drawdown)}) vs 벤치 {_pct(s.bench_total_return)}"
                      f" · 거래 {s.n_trades}")
@@ -406,6 +426,10 @@ def main(argv: list[str] | None = None) -> int:
     if decisions.empty:
         logger.warning("no completed decisions; nothing to evaluate")
         return 1
+    # Re-derive news coverage from the archive so rows written by older code are consistent.
+    flags = [news_available_for(t, d) for t, d in zip(decisions["ticker"], decisions["trade_date"], strict=False)]
+    decisions["news_available"] = [decisions["news_available"].iloc[i] if f is None else f for i, f in enumerate(flags)]
+    decisions["news_available"] = decisions["news_available"].astype("boolean")
     from kr import metrics as m
 
     prices, bench, bench_code = load_prices(sorted(decisions["ticker"].unique()), args.start, args.end, max(horizons))

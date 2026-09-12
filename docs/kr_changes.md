@@ -27,3 +27,6 @@ Base: upstream `be952b8` (2026-09-07). Every modified upstream file carries a
 | 4 | `tradingagents/llm_clients/openai_client.py` | `LocalCompatibleChatOpenAI.with_structured_output` honours `kr.structured_output_method` (json_schema) | grammar-constrained output on llama-server removes prose fallbacks (time) |
 | 4 | `tradingagents/agents/kr_analysts.py` | length caps (~900 words; sentiment narrative ~500 words) | run time |
 | 4 | new: `kr/report.py`, `kr/telegram.py`, `watchlist.txt`, `tests/kr/test_report_telegram.py`; `kr/run.py` wired for Obsidian md + Telegram | Phase 4 |
+| 5 | `tradingagents/dataflows/kr/krx.py` | `top_market_cap(date, n)` for `--universe top-mcap:N` | survivorship guard (§11) |
+| 5 | `pyproject.toml` | kr extra += matplotlib, scipy | equity PNG, Spearman |
+| 5 | new: `kr/backtest.py`, `kr/metrics.py`, `tests/kr/test_backtest.py` | backtest runner + LLM-free metrics | Phase 5 |
