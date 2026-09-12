@@ -84,4 +84,4 @@ Gateway headers.
 
 ## Telegram (`TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHAT_ID`)
 
-`getMe` / `getChat` verified 2026-09-12 (bot `@thomas_quant_bot`, private chat). Used in Phase 4.
+`getMe` / `getChat` verified 2026-09-12 with the configured bot and private chat. Used in Phase 4 (opt-in via `--telegram`).

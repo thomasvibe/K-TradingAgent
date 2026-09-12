@@ -229,3 +229,6 @@ results/
 *.db-wal
 *.db-shm
 .env.kr
+# KR: generated analysis reports (personal outputs) stay local
+docs/TradingAgents-KR/
+watchlist.local.txt

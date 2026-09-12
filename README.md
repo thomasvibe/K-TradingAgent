@@ -27,6 +27,8 @@
 
 ---
 
+> **KR fork**: Korean-market / local-LLM adaptation — see [README_KR.md](README_KR.md) and [docs/kr_changes.md](docs/kr_changes.md). <!-- KR -->
+
 # TradingAgents: Multi-Agents LLM Financial Trading Framework
 
 ## News
