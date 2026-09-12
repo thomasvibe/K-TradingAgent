@@ -1,13 +1,30 @@
 # TradingAgents-KR
 
-[TauricResearch/TradingAgents](https://github.com/TauricResearch/TradingAgents)를 포크해
-**한국 상장주식(KOSPI/KOSDAQ) + 로컬 LLM 전용**으로 개조한 버전입니다. 한 종목에 대해
-분석가 4명 → 강세/약세 토론 → 리서치 매니저 → 트레이더 → 리스크 토론 → 포트폴리오 매니저 순으로
-5단계 등급(Buy / Overweight / Hold / Underweight / Sell)과 Obsidian용 마크다운 리포트를 만들고,
-과거 날짜를 반복 실행하는 point-in-time 백테스트를 제공합니다. **주문 실행 기능은 없습니다.**
+[TauricResearch/TradingAgents](https://github.com/TauricResearch/TradingAgents)(Apache-2.0, 커밋 `be952b8` 기준)를
+**한국 상장주식(KOSPI/KOSDAQ) + 로컬 LLM 전용**으로 개조한 포크입니다. 원본은 미국 주식을 대상으로 여러 LLM
+에이전트(분석가 4명 → 강세/약세 토론 → 리서치 매니저 → 트레이더 → 리스크 토론 → 포트폴리오 매니저)가 5단계
+등급(Buy / Overweight / Hold / Underweight / Sell)을 내는 프레임워크이고, 이 포크는 그래프 구조와 에이전트 역할은
+그대로 두고 다음을 바꿨습니다.
 
-원본 README는 [README.md](README.md), upstream 대비 변경 내역은 [docs/kr_changes.md](docs/kr_changes.md),
-라이선스 고지는 [NOTICE_KR.md](NOTICE_KR.md)를 보세요.
+- **시장**: 미국 → 한국 상장주식(6자리 코드). `TRADINGAGENTS_MARKET=KR` 스위치 하나로 전환되며 미국 경로는 유지됩니다.
+- **데이터**: yfinance/StockTwits/Reddit/FRED/Polymarket → pykrx(주가·PER/PBR·투자자별 수급·공매도·지수),
+  OpenDART(재무제표·공시·임원/대량보유 보고), 네이버 뉴스(API HUB). 모든 조회는 분석 기준일 이전 데이터만 반환하는
+  point-in-time 방식이고 SQLite에 캐시됩니다.
+- **LLM**: 클라우드 API 대신 로컬 llama.cpp `llama-server`만 사용. 구조화 출력은 json_schema 방식으로 안정화했습니다.
+- **에이전트**: 감성 분석가는 소셜미디어 대신 뉴스·수급·공매도를 보고, 뉴스 분석가는 DART 공시와 시장 개요를 씁니다.
+  금액 단위(억원·원)와 한국어 출력을 처리합니다.
+- **출력**: Obsidian용 마크다운 리포트(frontmatter 포함), 선택적 텔레그램 요약.
+- **백테스트**: 주간 샘플링, look-ahead 차단, 중단 후 재개, LLM 없이 계산하는 등급별 성과·단조성·단순 전략 지표.
+
+주문 실행, 유니버스 스크리닝, 웹 UI는 범위 밖입니다. 원본 README는 [README.md](README.md), upstream 대비 변경 파일
+목록은 [docs/kr_changes.md](docs/kr_changes.md), 라이선스 고지는 [NOTICE_KR.md](NOTICE_KR.md)에 있습니다.
+**투자 권유가 아닙니다.**
+
+> **English**: A fork of TauricResearch/TradingAgents adapted to Korean listed equities (KOSPI/KOSDAQ) and
+> local-only LLM inference via llama.cpp. The agent graph is unchanged; the data layer is replaced with
+> point-in-time pykrx / OpenDART / Naver News sources, the sentiment and news analysts use KRX flows, short
+> selling and DART filings instead of social media and US macro feeds, outputs are Obsidian markdown reports,
+> and a resumable weekly backtest with LLM-free metrics is included. No order execution. Not investment advice.
 
 ## 무엇이 필요한가
 
