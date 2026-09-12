@@ -89,6 +89,8 @@ def send_text(text: str) -> bool:
             if not r.ok or not r.json().get("ok"):
                 logger.warning("Telegram sendMessage failed: %s %s", r.status_code, r.text[:200])
                 ok = False
+            else:
+                logger.info("Telegram sendMessage ok (%d chars)", len(chunk))
         except Exception as exc:  # noqa: BLE001 — delivery must never fail the run
             logger.warning("Telegram sendMessage error: %s", exc)
             ok = False
@@ -108,6 +110,7 @@ def send_document(path: Path, caption: str = "") -> bool:
         if not r.ok or not r.json().get("ok"):
             logger.warning("Telegram sendDocument failed: %s %s", r.status_code, r.text[:200])
             return False
+        logger.info("Telegram sendDocument ok (%s)", path.name)
         return True
     except Exception as exc:  # noqa: BLE001
         logger.warning("Telegram sendDocument error: %s", exc)

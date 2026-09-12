@@ -1,8 +1,8 @@
 """Record every outbound HTTP host during a run (KR isolation check, spec §8).
 
 Hooks the three transports the code base uses: ``http.client`` (requests /
-urllib3 / urllib — pykrx, DART, Naver, Telegram), ``httpx`` (openai SDK -> the
-local llama-server) and ``curl_cffi`` (yfinance, must never fire in KR mode).
+urllib3 / urllib — pykrx, DART, Naver, Telegram), ``httpcore`` (httpx / openai
+SDK -> the local llama-server) and ``curl_cffi`` (yfinance, must never fire in KR mode).
 """
 
 from __future__ import annotations
@@ -44,21 +44,17 @@ class HttpAudit:
         http.client.HTTPConnection.__init__ = init
         self._restore.append(lambda: setattr(http.client.HTTPConnection, "__init__", orig_init))
 
-        try:
-            import httpx
+        # httpx sends everything through an httpcore ConnectionPool; hooking there catches
+        # clients created before or after install(). The openai SDK ships a vendored copy
+        # (``httpx2`` / ``httpcore2``), so both module families are patched.
+        import importlib
 
-            # Transport level: the openai SDK wraps httpx.Client, so Client.send is not
-            # a reliable hook; every real request still goes through HTTPTransport.
-            orig_handle = httpx.HTTPTransport.handle_request
-
-            def handle_request(transport, request, *args, **kwargs):
-                audit._record(request.url.host)
-                return orig_handle(transport, request, *args, **kwargs)
-
-            httpx.HTTPTransport.handle_request = handle_request
-            self._restore.append(lambda: setattr(httpx.HTTPTransport, "handle_request", orig_handle))
-        except ImportError:
-            pass
+        for mod_name in ("httpcore", "httpcore2"):
+            try:
+                mod = importlib.import_module(mod_name)
+            except ImportError:
+                continue
+            self._patch_pool(mod.ConnectionPool)
         try:
             from curl_cffi import requests as cffi_requests
 
@@ -73,6 +69,18 @@ class HttpAudit:
         except ImportError:
             pass
         return self
+
+    def _patch_pool(self, pool_cls) -> None:
+        audit = self
+        orig = pool_cls.handle_request
+
+        def pool_handle(pool, request, *args, **kwargs):
+            host = request.url.host
+            audit._record(host.decode() if isinstance(host, bytes) else host)
+            return orig(pool, request, *args, **kwargs)
+
+        pool_cls.handle_request = pool_handle
+        self._restore.append(lambda: setattr(pool_cls, "handle_request", orig))
 
     def uninstall(self) -> None:
         while self._restore:
