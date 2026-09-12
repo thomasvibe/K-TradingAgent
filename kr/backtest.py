@@ -361,7 +361,8 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--risk-rounds", type=int, default=1)
     ap.add_argument("--seconds-per-run", type=float, default=DEFAULT_SECONDS_PER_RUN)
     ap.add_argument("--report-only", action="store_true", help="skip runs; recompute metrics from the DB")
-    ap.add_argument("--no-telegram", action="store_true")
+    ap.add_argument("--telegram", action="store_true", help="send the summary to Telegram (off by default)")
+    ap.add_argument("--no-telegram", action="store_true", help=argparse.SUPPRESS)  # kept for old scripts
     args = ap.parse_args(argv)
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
     logging.getLogger("httpx").setLevel(logging.WARNING)
@@ -439,7 +440,7 @@ def main(argv: list[str] | None = None) -> int:
     png = plot_equity(summary, run_dir)
     report = write_report(run_dir, args, decisions, outcomes, summary, config["deep_think_llm"], png)
     logger.info("report -> %s", report)
-    if not args.no_telegram:
+    if args.telegram:
         from kr.telegram import send_text
 
         send_text(telegram_summary(args, summary))

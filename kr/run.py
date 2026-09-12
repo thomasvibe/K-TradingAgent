@@ -1,12 +1,13 @@
 """Single-ticker / watchlist runner for TradingAgents-KR.
 
     python -m kr.run --ticker 005930 [--date YYYY-MM-DD] [--analysts market,social,news,fundamentals]
-        [--debate-rounds 1] [--risk-rounds 1] [--checkpoint] [--no-telegram] [--no-http-audit]
+        [--debate-rounds 1] [--risk-rounds 1] [--checkpoint] [--telegram [--attach]] [--no-http-audit]
     python -m kr.run --watchlist watchlist.txt
 
-Outputs go to ``results/runs/<date>/<ticker>/`` (final_state.json, signal.txt,
-reports/, stats.json, http_hosts.json). Telegram / Obsidian output arrives in
-Phase 4; the flags are accepted now so scripts don't change later.
+Outputs: the Obsidian-style report ``docs/TradingAgents-KR/<date>/<ticker>_<name>.md``
+(or under ``$OBSIDIAN_VAULT_DIR``) plus raw run artifacts in
+``results/runs/<date>/<ticker>/`` (final_state.json, signal.txt, reports/,
+stats.json, http_hosts.json). Telegram delivery is opt-in via ``--telegram``.
 """
 
 from __future__ import annotations
@@ -81,7 +82,7 @@ def run_one(ticker: str, date: str, args, config: dict) -> dict:
     (out_dir / "signal.txt").write_text(f"{signal}\n")
     (out_dir / "stats.json").write_text(json.dumps({**summary, "stats": handler.to_json()}, ensure_ascii=False,
                                                    indent=2, default=str))
-    (out_dir / "node_stats.md").write_text(handler.markdown_table(int(config.get("kr_context_window", 131072))) + "\n")
+    (out_dir / "node_stats.md").write_text(handler.markdown_table(int(config.get("kr_context_window", 65536))) + "\n")
     logger.info("%s %s -> %s in %.0fs (fallbacks %d, forbidden %s, http offenders %s)",
                 code, date, signal, seconds, len(counter.fallbacks), forbidden or "none",
                 (http_report or {}).get("offenders") or "none")
@@ -136,14 +137,16 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--debate-rounds", type=int, default=1)
     ap.add_argument("--risk-rounds", type=int, default=1)
     ap.add_argument("--checkpoint", action="store_true")
-    ap.add_argument("--no-telegram", action="store_true")
-    ap.add_argument("--attach", action="store_true", help="attach the md report to the Telegram message (Phase 4)")
+    ap.add_argument("--telegram", action="store_true", help="send the summary to Telegram (off by default)")
+    ap.add_argument("--no-telegram", action="store_true", help=argparse.SUPPRESS)  # kept for old scripts
+    ap.add_argument("--attach", action="store_true", help="with --telegram: attach the md report (sendDocument)")
     ap.add_argument("--no-http-audit", action="store_true")
     ap.add_argument("--debug", action="store_true")
     args = ap.parse_args(argv)
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
     logging.getLogger("httpx").setLevel(logging.WARNING)
 
+    args.no_telegram = not args.telegram  # Telegram is opt-in
     tickers = read_watchlist(args.watchlist) if args.watchlist else []
     if args.ticker:
         tickers.append(args.ticker)

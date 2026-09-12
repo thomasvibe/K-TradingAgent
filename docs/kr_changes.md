@@ -30,3 +30,5 @@ Base: upstream `be952b8` (2026-09-07). Every modified upstream file carries a
 | 5 | `tradingagents/dataflows/kr/krx.py` | `top_market_cap(date, n)` for `--universe top-mcap:N` | survivorship guard (§11) |
 | 5 | `pyproject.toml` | kr extra += matplotlib, scipy | equity PNG, Spearman |
 | 5 | new: `kr/backtest.py`, `kr/metrics.py`, `tests/kr/test_backtest.py` | backtest runner + LLM-free metrics | Phase 5 |
+| 5 | `kr/run.py`, `kr/backtest.py` | Telegram is opt-in (`--telegram`); `--no-telegram` kept as a hidden no-op | user runs the system on demand and reads the md report |
+| 5 | new: `docs/kr_usage.md`, `docs/phase5_backtest.md` | usage guide, partial backtest record | wrap-up |
