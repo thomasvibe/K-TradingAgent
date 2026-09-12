@@ -470,3 +470,24 @@ __all__ = [
     "get_stock_data", "get_fundamentals", "get_investor_flow", "get_short_selling",
     "get_market_overview", "get_index_close", "from_krx_date",
 ]
+
+
+def top_market_cap(date: str, n: int, market: str = "ALL") -> list[str]:
+    """Top-``n`` tickers by market cap as of ``date`` (survivorship-safe universe; needs login)."""
+    require_krx_login("market cap ranking (get_market_cap by ticker)")
+    stock = pykrx_stock()
+    kd = to_krx_date(date)
+
+    def fetch():
+        df = _krx_call(lambda: stock.get_market_cap(kd, market=market))
+        if df is None or df.empty or "시가총액" not in df.columns:
+            return pd.DataFrame()
+        return df[["시가총액"]].sort_values("시가총액", ascending=False)
+
+    ranked = cached_frame("krx_cap_rank", [market, kd], fetch, ttl=ttl_for_window(date))
+    if ranked.empty:
+        raise NoMarketDataError("KRX", detail=f"no market-cap table on {date}")
+    return [str(t).zfill(6) for t in ranked.index[:n]]
+
+
+__all__.append("top_market_cap")

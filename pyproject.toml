@@ -47,6 +47,8 @@ bedrock = [
 # KR: Korean market data layer (pykrx scrapes KRX/Naver; DART/Naver use requests).
 kr = [
     "pykrx>=1.2.8",
+    "matplotlib>=3.8",   # backtest equity curve PNG
+    "scipy>=1.11",       # Spearman monotonicity test
 ]
 
 [project.scripts]
