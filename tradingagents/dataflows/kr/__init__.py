@@ -37,7 +37,7 @@ KR_DEFAULTS: dict = {
     "investor_flow_days": 20,
     "short_selling_days": 20,
     "market_overview_days": 20,
-    "disclosure_lookback_days": 30,
+    "disclosure_lookback_days": 90,
     # Naver news: "hub" = NAVER API HUB (NCP, current); "developers" = legacy developers.naver.com
     "naver_api": "hub",
     "news_extra_keywords": [],          # appended to the company name query

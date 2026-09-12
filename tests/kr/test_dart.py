@@ -58,8 +58,10 @@ def fake_dart(monkeypatch, kr_env):
             rows = REPORTS.get(key)
             return {"status": "000", "message": "ok", "list": rows} if rows else {"status": "013", "message": "no data"}
         if endpoint == "list.json":
-            return {"status": "000", "list": [
+            return {"status": "000", "total_page": 1, "list": [
                 {"rcept_dt": "20250910", "report_nm": "주요사항보고서", "flr_nm": "삼성전자", "rcept_no": "20250910000001", "rm": ""},
+                {"rcept_dt": "20250731", "report_nm": "주요사항보고서(유무상증자결정)", "flr_nm": "삼성전자", "rcept_no": "20250731000001", "rm": ""},
+                {"rcept_dt": "20250811", "report_nm": "파생상품거래손실발생", "flr_nm": "삼성전자 [코]", "rcept_no": "20250811000001", "rm": ""},
                 {"rcept_dt": "20250912", "report_nm": "FUTURE 정정공시", "flr_nm": "삼성전자", "rcept_no": "20250912000001", "rm": "정"},
             ]}
         if endpoint == "elestock.json":
@@ -110,6 +112,10 @@ def test_income_statement_quarterly_q4_is_fy_minus_9m(fake_dart):
     cells = [c.strip() for c in row.strip("|").split("|")][1:]
     # Q1 1,000 / Q2 2,000 / Q3 3,000 / Q4 = 10,000 - 6,000 = 4,000 / 2025Q1 1,100 / 2025Q2 2,100 (억원)
     assert cells == ["1,000.0", "2,000.0", "3,000.0", "4,000.0", "1,100.0", "2,100.0"]
+    header = next(line for line in out.splitlines() if line.startswith("| 계정"))
+    assert "2024Q4 (접수 2025-03-11)" in header and "2024FY" not in header  # single-quarter column is labelled Q4
+    assert "ANNUAL FY2024 (사업보고서 접수 2025-03-11, 억원): 매출액 10,000.0" in out  # annual reference line
+    assert "| 영업외손익 (세전이익−영업이익) |" in out
 
 
 @pytest.mark.unit
@@ -134,6 +140,11 @@ def test_statements_are_cached_after_first_fetch(fake_dart):
 def test_disclosures_and_insiders_are_point_in_time(fake_dart):
     disc = dart.get_disclosures("005930", TRADE_DATE, 30)
     assert "주요사항보고서" in disc and "FUTURE" not in disc
+    assert "**[capital/material event]**" in disc  # 유무상증자결정 flagged in the window listing
+    assert "Capital-structure & material-event filings, last 365 days" in disc
+    assert "파생상품거래손실발생" in disc and "20250731 | 주요사항보고서(유무상증자결정)" in disc
+    actions = dart.corporate_actions("005930", TRADE_DATE, 365)
+    assert [a["rcept_dt"] for a in actions] == ["20250731", "20250811"] or sorted(a["rcept_dt"] for a in actions) == ["20250731", "20250811"]
     ins = dart.get_insider_transactions("005930", TRADE_DATE)
     assert "홍길동" in ins and "국민연금" in ins and "FUTURE" not in ins
     assert "부사장 반도체" in ins  # newline in a cell collapsed

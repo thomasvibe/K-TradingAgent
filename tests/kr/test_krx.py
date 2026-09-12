@@ -98,3 +98,24 @@ def test_no_data_raises(kr_env):
 
     with pytest.raises(NoMarketDataError):
         krx.get_stock_data("005930", "2020-01-01", "2020-01-10")
+
+
+@pytest.mark.unit
+def test_investor_flow_flags_block_days(kr_env, monkeypatch):
+    """A single day with a net purchase far above the window median is called out with same-day filings."""
+    import tradingagents.dataflows.kr.krx as krx_mod
+
+    class SpikyStock(type(kr_env.stock)):
+        def get_market_trading_value_by_date(self, fromdate, todate, ticker, on="순매수"):
+            df = super().get_market_trading_value_by_date(fromdate, todate, ticker, on)
+            df = df.copy()
+            df.loc[pd.Timestamp("2025-09-09"), "외국인합계"] = 3.8e10   # +380억
+            df.loc[pd.Timestamp("2025-09-09"), "개인"] = -4.05e10       # -405억
+            return df
+
+    monkeypatch.setattr(krx_mod, "pykrx_stock", lambda: SpikyStock())
+    monkeypatch.setattr("tradingagents.dataflows.kr.dart.filings_between",
+                        lambda code, s, e: [{"rcept_dt": "20250909", "report_nm": "주식등의대량보유상황보고서(일반)"}])
+    out = krx.get_investor_flow("005930", TRADE_DATE, 20)
+    assert "Notable days" in out
+    assert "2025-09-09: 외국인합계 380.0, 기관합계" in out and "주식등의대량보유상황보고서" in out

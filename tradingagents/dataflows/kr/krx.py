@@ -201,8 +201,21 @@ def get_stock_data(
     header = f"# Stock data for {code} {name} (KRX, adjusted close, KRW) from {start_date} to {end_date}\n"
     header += f"# Total records in range: {total}"
     header += f"; showing the most recent {max_rows} rows\n" if truncated else "\n"
-    header += f"# Data retrieved on: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n\n"
-    return header + out.to_csv()
+    header += f"# Data retrieved on: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n"
+    for line in _corporate_action_lines(code, end_date):
+        header += f"# {line}\n"
+    return header + "\n" + out.to_csv()
+
+
+def _corporate_action_lines(code: str, curr_date: str, days: int = 365) -> list[str]:
+    """DART capital-structure filings (fail-open; empty when DART is not configured)."""
+    try:
+        from .dart import format_corporate_actions
+
+        return format_corporate_actions(code, curr_date, days)
+    except Exception as exc:  # noqa: BLE001
+        logger.debug("corporate action lines unavailable for %s: %s", code, exc)
+        return []
 
 
 # --- fundamentals (KRX valuation) --------------------------------------------
@@ -277,9 +290,12 @@ def get_fundamentals(
     if not px.empty:
         lines += [
             f"Close on {px.index[-1].date()}: {_num(px['Close'].iloc[-1], 0)}",
-            f"52-week high: {_num(px['High'].max(), 0)}",
-            f"52-week low: {_num(px['Low'].min(), 0)}",
+            f"52-week high: {_num(px['High'].max(), 0)} (on {px['High'].idxmax().date()}, adjusted)",
+            f"52-week low: {_num(px['Low'].min(), 0)} (on {px['Low'].idxmin().date()}, adjusted)",
         ]
+    actions = _corporate_action_lines(code, curr_date)
+    if actions:
+        lines += [""] + actions
     lines += ["", "Source: KRX daily valuation (PER uses trailing net income per KRX; consolidated where reported)."]
     return "\n".join(lines)
 
@@ -322,9 +338,51 @@ def get_investor_flow(
     for window in (5, n):
         sub = value.tail(window)
         lines.append(f"- last {len(sub)} days: " + ", ".join(f"{c} {_eok(sub[c].sum())}" for c in cols))
+    lines += _notable_flow_days(code, value, cols, curr_date)
     lines += ["", "Positive = net buying, negative = net selling. Institutions (기관합계) include "
               "pension funds and asset managers; 기타법인 = other corporations."]
     return "\n".join(lines)
+
+
+def _notable_flow_days(code: str, value: pd.DataFrame, cols: list[str], curr_date: str,
+                       factor: float = 4.0) -> list[str]:
+    """Flag days whose largest |net purchase| is > ``factor`` x the window median, with same-day filings.
+
+    A one-day block (e.g. a major holder selling into foreign buying) reads as "distribution"
+    in raw flow tables; pairing it with the filing of that day tells the reader what it was.
+    """
+    if value.empty or not cols:
+        return []
+    mags = value[cols].abs().max(axis=1)
+    med = float(mags.median()) or 0.0
+    if med <= 0:
+        return []
+    days = mags[mags > factor * med]
+    if days.empty:
+        return []
+    filings: dict[str, list[str]] = {}
+    try:
+        from .dart import filings_between
+
+        start = (value.index[0] - pd.DateOffset(days=1)).strftime("%Y-%m-%d")
+        end = (pd.Timestamp(curr_date) + pd.DateOffset(days=0)).strftime("%Y-%m-%d")
+        for it in filings_between(code, start, end):
+            d = str(it.get("rcept_dt", ""))
+            filings.setdefault(f"{d[:4]}-{d[4:6]}-{d[6:8]}", []).append(str(it.get("report_nm", "")))
+    except Exception as exc:  # noqa: BLE001 — filings are optional context
+        logger.debug("same-day filings unavailable for %s: %s", code, exc)
+    out = ["", f"Notable days (|net| > {factor:.0f}x window median — check for block trades / holder changes):"]
+    for d, _ in days.items():
+        row = value.loc[d]
+        key = d.strftime("%Y-%m-%d")
+        detail = ", ".join(f"{c} {_eok(row[c])}" for c in cols)
+        same = filings.get(key, [])
+        # filings arrive on the block day or the next business days; show up to +2 days
+        for k in (1, 2):
+            same += [f"(+{k}d) {t}" for t in filings.get((d + pd.DateOffset(days=k)).strftime("%Y-%m-%d"), [])]
+        note = "; filings: " + " | ".join(same[:4]) if same else "; no filing within 2 days"
+        out.append(f"- {key}: {detail}{note}")
+    return out
 
 
 # --- short selling ----------------------------------------------------------------

@@ -54,12 +54,13 @@ def get_market_overview(
 def get_disclosures(
     ticker: Annotated[str, "6-digit Korean stock code, e.g. 005930"],
     curr_date: Annotated[str, "The current trading date, YYYY-mm-dd"],
-    look_back_days: Annotated[int, "calendar days to look back"] = 30,
+    look_back_days: Annotated[int, "calendar days to look back"] = 90,
 ) -> str:
     """
     Regulatory filings (공시) for the company from DART received in the look-back window
-    ending on curr_date: title, filing date, filer. A point-in-time event source that
-    also works in backtests.
+    ending on curr_date (title, filing date, filer), plus every capital-structure or material
+    event filing of the last 12 months (증자, 전환사채, 소각, 분할, 파생상품손실, 잠정실적...).
+    A point-in-time event source that also works in backtests.
     """
     return route_to_vendor("get_disclosures", ticker, curr_date, look_back_days)
 

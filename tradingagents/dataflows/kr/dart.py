@@ -265,6 +265,10 @@ IS_ACCOUNTS = [
     ("매출총이익", ["ifrs-full_GrossProfit", "ifrs_GrossProfit"], r"^매출총이익$"),
     ("영업이익", ["dart_OperatingIncomeLoss"], r"^영업이익(\(손실\))?$"),
     ("법인세차감전순이익", ["ifrs-full_ProfitLossBeforeTax", "ifrs_ProfitLossBeforeTax"], r"법인세.*차감전.*(순)?이익"),
+    ("금융수익", ["ifrs-full_FinanceIncome", "ifrs_FinanceIncome"], r"^금융수익$"),
+    ("금융비용", ["ifrs-full_FinanceCosts", "ifrs_FinanceCosts"], r"^금융(비용|원가)$"),
+    ("기타수익", ["dart_OtherGains", "ifrs-full_OtherIncome"], r"^기타(영업외)?(수익|이익)$"),
+    ("기타비용", ["dart_OtherLosses", "ifrs-full_OtherExpenseByNature"], r"^기타(영업외)?(비용|손실)$"),
     ("당기순이익", ["ifrs-full_ProfitLoss", "ifrs_ProfitLoss"], r"^(당기순이익|분기순이익|반기순이익)(\(손실\))?$"),
     ("지배주주순이익", ["ifrs-full_ProfitLossAttributableToOwnersOfParent", "ifrs_ProfitLossAttributableToOwnersOfParent"], r"지배기업.*소유주.*(순)?이익"),
 ]
@@ -290,8 +294,11 @@ def _pick(rows: list[dict], sj_divs: tuple[str, ...], ids: list[str], name_re: s
     return None
 
 
-def _period_label(report: dict) -> str:
-    return f"{report['bsns_year']}{report['period']} (접수 {report['rcept_date']})"
+def _period_label(report: dict, single_quarter: bool = False) -> str:
+    period = report["period"]
+    if single_quarter and report["reprt_code"] == "11011":
+        period = "Q4"  # the annual report column shows FY minus 9M cumulative, i.e. Q4 alone
+    return f"{report['bsns_year']}{period} (접수 {report['rcept_date']})"
 
 
 def _quarter_value(report: dict, reports: list[dict], row: dict) -> float | None:
@@ -353,23 +360,34 @@ def _statement(ticker: str, curr_date: str | None, freq: str, kind: str) -> str:
         note = "annual (사업보고서) amounts"
     else:
         sel = reports[-6:]
-        columns = [_period_label(r) for r in sel]
+        columns = [_period_label(r, single_quarter=(kind == "IS")) for r in sel]
         rows = []
+        numeric: dict[str, list[float | None]] = {}
         for name, ids, pat in accounts:
-            vals = []
+            vals, nums = [], []
             for r in sel:
                 row = _pick(r["rows"], divs, ids, pat)
                 if row is None:
-                    vals.append("N/A")
+                    v = None
                 elif kind == "BS":
-                    vals.append(_fmt_eok(_amount(row.get("thstrm_amount"))))
+                    v = _amount(row.get("thstrm_amount"))
                 elif kind == "IS":
-                    vals.append(_fmt_eok(_quarter_value(r, reports, row)))
+                    v = _quarter_value(r, reports, row)
                 else:  # CF: cumulative year-to-date as filed
                     v = _amount(row.get("thstrm_add_amount"))
-                    vals.append(_fmt_eok(v if v is not None else _amount(row.get("thstrm_amount"))))
+                    if v is None:
+                        v = _amount(row.get("thstrm_amount"))
+                nums.append(v)
+                vals.append(_fmt_eok(v))
+            numeric[name] = nums
             rows.append((name, vals))
-        note = {"BS": "period-end balances", "IS": "single-quarter amounts (Q4 = FY − 3Q cumulative)",
+        if kind == "IS" and "영업이익" in numeric and "법인세차감전순이익" in numeric:
+            derived = [None if (a is None or b is None) else b - a
+                       for a, b in zip(numeric["영업이익"], numeric["법인세차감전순이익"], strict=False)]
+            rows.append(("영업외손익 (세전이익−영업이익)", [_fmt_eok(v) for v in derived]))
+        note = {"BS": "period-end balances",
+                "IS": "SINGLE-QUARTER amounts — the Q4 column is the annual report minus the 9-month cumulative; "
+                      "annual totals are listed below, never sum or read a quarter column as a full year",
                 "CF": "cumulative year-to-date amounts as filed"}[kind]
 
     fs_divs = sorted({r["fs_div"] for r in reports})
@@ -380,6 +398,15 @@ def _statement(ticker: str, curr_date: str | None, freq: str, kind: str) -> str:
         "Source: OpenDART fnlttSinglAcntAll.",
     ]
     title = f"# {label} for {code} (DART, {'annual' if annual else 'quarterly'}) as of {curr_date}"
+    if not annual and kind == "IS":
+        fy = [r for r in reports if r["reprt_code"] == "11011"][-2:]
+        for r in fy:
+            parts = []
+            for name, ids, pat in accounts:
+                if name in ("매출액", "영업이익", "법인세차감전순이익", "당기순이익", "지배주주순이익"):
+                    row = _pick(r["rows"], divs, ids, pat)
+                    parts.append(f"{name} {_fmt_eok(_amount(row.get('thstrm_amount')) if row else None)}")
+            notes.append(f"ANNUAL FY{r['bsns_year']} (사업보고서 접수 {r['rcept_date']}, 억원): " + " / ".join(parts))
     return _render_table(title, columns, rows, notes)
 
 
@@ -409,6 +436,56 @@ def get_cashflow(
 
 # --- disclosures ------------------------------------------------------------------------
 
+# Filings that change the share count, capital structure or reported profit in a way the
+# price-level analysis must know about (bonus/rights issues, convertibles, buybacks/cancellation,
+# splits, mergers, derivative losses, preliminary earnings, ex-rights notices).
+CORPORATE_ACTION_RE = re.compile(
+    r"무상증자|유상증자|유무상증자|전환사채|신주인수권부사채|교환사채|주식소각|자기주식|주식분할|주식병합|액면|"
+    r"합병|분할|감자|권리락|배당|파생상품거래손실|파생상품거래이익|영업\(잠정\)실적|매매거래정지|상장폐지|"
+    r"관리종목|불성실공시|최대주주변경|경영권"
+)
+
+
+def filings_between(code: str, start: str, end: str) -> list[dict]:
+    """All DART filings for ``code`` received in ``[start, end]`` (paged, cached)."""
+    corp_code = get_corp_code(code)
+    s, e = pd.Timestamp(start).strftime("%Y%m%d"), pd.Timestamp(end).strftime("%Y%m%d")
+    ttl = None if pd.Timestamp(end) < pd.Timestamp.today().normalize() else 3600
+    items: list[dict] = []
+    page = 1
+    while True:
+        payload = _request("list.json", {"corp_code": corp_code, "bgn_de": s, "end_de": e, "page_no": str(page),
+                                         "page_count": "100", "sort": "date", "sort_mth": "desc"}, ttl)
+        items += payload.get("list", [])
+        total_page = int(payload.get("total_page") or 1)
+        if page >= total_page or page >= 10:
+            break
+        page += 1
+    return [it for it in items if str(it.get("rcept_dt", "")) <= e]
+
+
+def corporate_actions(code: str, curr_date: str, days: int = 365) -> list[dict]:
+    """Capital-structure / material-event filings in the last ``days`` (newest first)."""
+    start = (pd.Timestamp(curr_date) - pd.DateOffset(days=days)).strftime("%Y-%m-%d")
+    return [it for it in filings_between(code, start, curr_date) if CORPORATE_ACTION_RE.search(str(it.get("report_nm", "")))]
+
+
+def format_corporate_actions(code: str, curr_date: str, days: int = 365, limit: int = 25) -> list[str]:
+    """Lines for tool outputs; empty list when nothing (or when DART is unavailable)."""
+    try:
+        items = corporate_actions(code, curr_date, days)
+    except Exception as exc:  # noqa: BLE001 — optional enrichment
+        logger.warning("corporate action lookup failed for %s: %s", code, exc)
+        return [f"(corporate-action lookup unavailable: {type(exc).__name__})"]
+    if not items:
+        return []
+    lines = [f"Capital-structure & material-event filings, last {days} days (DART, as of {curr_date}) — "
+             "share-count changes (무상증자/유상증자/CB/소각/분할) invalidate price levels and per-share ratios "
+             "after the ex-date; check the filing for the schedule:"]
+    for it in items[:limit]:
+        lines.append(f"- {it.get('rcept_dt')} | {_cell(it.get('report_nm'))} | {_cell(it.get('flr_nm'))}")
+    return lines
+
 def get_disclosures(
     ticker: Annotated[str, "6-digit Korean stock code"],
     curr_date: Annotated[str, "analysis date in YYYY-MM-DD format"],
@@ -417,24 +494,19 @@ def get_disclosures(
     """DART filings (title, date, filer) received in the window ending on ``curr_date``."""
     code = normalize_kr_symbol(ticker)
     n = int(look_back_days or kr_setting("disclosure_lookback_days"))
-    corp_code = get_corp_code(code)
     end = pd.Timestamp(curr_date).normalize()
     start = end - pd.DateOffset(days=n)
-    params = {"corp_code": corp_code, "bgn_de": start.strftime("%Y%m%d"), "end_de": end.strftime("%Y%m%d"),
-              "page_no": "1", "page_count": "100", "sort": "date", "sort_mth": "desc"}
-    ttl = None if end < pd.Timestamp.today().normalize() else 3600
-    payload = _request("list.json", params, ttl)
-    cutoff = end.strftime("%Y%m%d")
-    items = [it for it in payload.get("list", []) if str(it.get("rcept_dt", "")) <= cutoff]
-    if not items:
-        return (f"No DART disclosures for {code} between {start.date()} and {end.date()} "
-                f"(as of {curr_date}).")
+    items = filings_between(code, start.strftime("%Y-%m-%d"), end.strftime("%Y-%m-%d"))
     lines = [f"## DART disclosures for {code} ({start.date()} ~ {end.date()}, as of {curr_date})", ""]
+    if not items:
+        lines.append(f"No DART disclosures for {code} in this window.")
     for it in items:
         rm = f" [{_cell(it['rm'])}]" if it.get("rm") else ""
-        lines.append(f"- {it.get('rcept_dt')} | {_cell(it.get('report_nm'))} | filer: {_cell(it.get('flr_nm'))}{rm} "
+        flag = " **[capital/material event]**" if CORPORATE_ACTION_RE.search(str(it.get("report_nm", ""))) else ""
+        lines.append(f"- {it.get('rcept_dt')} | {_cell(it.get('report_nm'))}{flag} | filer: {_cell(it.get('flr_nm'))}{rm} "
                      f"(rcept_no {it.get('rcept_no')})")
-    lines += ["", "Titles are as filed; 정정 = correction, 기재정정 = amended text."]
+    lines += ["", "Titles are as filed; 정정 = correction, 기재정정 = amended text.", ""]
+    lines += format_corporate_actions(code, curr_date, 365) or ["No capital-structure filings in the last 365 days."]
     return "\n".join(lines)
 
 
@@ -494,4 +566,5 @@ __all__ = [
     "get_corp_code", "get_company_profile", "refresh_corp_codes", "parse_corp_code_zip",
     "fetch_statement_rows", "available_reports", "get_balance_sheet", "get_income_statement",
     "get_cashflow", "get_disclosures", "get_insider_transactions", "DartQuotaExceededError", "DartError",
+    "filings_between", "corporate_actions", "format_corporate_actions", "CORPORATE_ACTION_RE",
 ]

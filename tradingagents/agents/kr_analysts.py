@@ -85,7 +85,11 @@ def create_kr_news_analyst(llm):
         "hard events, headlines as framing; get_insider_transactions(ticker, curr_date) for executive and "
         "5%-holder ownership reports; get_market_overview(curr_date, look_back_days) for KOSPI/KOSDAQ moves "
         "and foreign/institutional net flows. Distinguish company-specific catalysts from market-wide moves, "
-        "note the Korean market's sensitivity to foreign investor flows and the won, and cite dates."
+        "note the Korean market's sensitivity to foreign investor flows and the won, and cite dates. "
+        "Filings outrank headlines: never quote revenue/profit figures from a news article unless you name the article "
+        "and note that it is unverified, and flag every capital-structure filing (무상증자/유상증자/CB/소각/분할, ex-dates, "
+        "listing dates) as a dated event the trader must account for. If a headline number contradicts a filing, "
+        "say so explicitly."
         + NO_RETRY_RULE + LENGTH_RULE
         + " Make sure to append a Markdown table at the end of the report to organize key points in the report, "
         "organized and easy to read."
@@ -108,7 +112,13 @@ def create_kr_fundamentals_analyst(llm):
         "figures take precedence over separate (별도) ones; PER and PBR come from KRX daily data; quarterly income "
         "statements show single-quarter amounts (Q4 = full year minus nine-month cumulative) while cash-flow "
         "statements are cumulative year-to-date; each statement column carries its DART filing date (접수일) — "
-        "always cite the filing date of the figures you use and never use a report filed after today's date."
+        "always cite the filing date of the figures you use and never use a report filed after today's date. "
+        "Annual figures must come from the annual table or the 'ANNUAL FY' lines, never from a single-quarter column. "
+        "When net income diverges from operating income, explain it with the 금융수익/금융비용/기타손익 rows and the "
+        "영업외손익 row, and check the disclosure list for 파생상품거래손실 (convertible-bond derivative revaluation is a "
+        "non-cash loss driven by the share price, not an operating problem). Any capital-structure filing "
+        "(무상증자/유상증자/전환사채/소각/분할) must be reported with its schedule, because it changes the share count "
+        "and every per-share ratio."
         + NO_RETRY_RULE + LENGTH_RULE
         + " Make sure to append a Markdown table at the end of the report to organize key points in the report, "
         "organized and easy to read."
@@ -196,7 +206,7 @@ Rising short share and balance signal bearish positioning; a high balance can al
 
 ## How to analyze this data
 
-1. **Read positioning first.** Compute the direction and persistence of foreign and institutional net flows over 5 and 20 days; treat that as the leading sentiment signal.
+1. **Read positioning first.** Compute the direction and persistence of foreign and institutional net flows over 5 and 20 days; treat that as the leading sentiment signal. A single outsized day flagged under "Notable days" is a block trade or holder change (see the filing named there), not a trend — do not read it as broad accumulation or distribution.
 2. **Read short-selling as a bearish-conviction gauge.** Compare the latest short share and balance to the window's range.
 3. **Cross-check against the news flow.** If headlines are positive but foreigners are net sellers (or vice versa), that divergence is itself the signal.
 4. **Distinguish event from framing.** Earnings, contracts, regulatory filings are events; commentary is framing.
