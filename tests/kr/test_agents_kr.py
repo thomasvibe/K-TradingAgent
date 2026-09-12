@@ -231,3 +231,32 @@ def test_korean_language_instruction_bans_han_and_repetition(kr_env):
 
     set_config({"market": "US", "output_language": "English"})
     assert get_language_instruction() == ""
+
+
+@pytest.mark.unit
+def test_local_client_sends_dry_sampling_and_han_grammar_only_where_allowed(kr_env):
+    """llama-server rejects a custom grammar with tools, and response_format brings its own."""
+    from langchain_core.messages import HumanMessage
+
+    from tradingagents.dataflows.config import set_config
+    from tradingagents.llm_clients.openai_client import NO_HAN_GRAMMAR, LocalCompatibleChatOpenAI
+
+    llm = LocalCompatibleChatOpenAI(model="local", base_url="http://localhost:9/v1", api_key="x")
+    tool = {"type": "function", "function": {"name": "f", "parameters": {"type": "object", "properties": {}}}}
+    msg = [HumanMessage("hi")]
+
+    set_config({"market": "US"})
+    assert llm._get_request_payload(msg).get("extra_body") is None
+
+    set_config({"market": "KR", "kr": {}})
+    plain = llm._get_request_payload(msg)["extra_body"]
+    assert plain["dry_multiplier"] == 0.8 and plain["grammar"] == NO_HAN_GRAMMAR
+
+    with_tools = llm._get_request_payload(msg, tools=[tool])["extra_body"]
+    assert "grammar" not in with_tools and with_tools["dry_multiplier"] == 0.8
+
+    structured = llm._get_request_payload(msg, response_format={"type": "json_object"})["extra_body"]
+    assert "grammar" not in structured
+
+    set_config({"market": "KR", "kr": {"ban_han_characters": False}})
+    assert "grammar" not in llm._get_request_payload(msg)["extra_body"]

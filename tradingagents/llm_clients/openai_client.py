@@ -51,6 +51,11 @@ class NormalizedChatOpenAI(ChatOpenAI):
         return super().with_structured_output(schema, method=method, **kwargs)
 
 
+# KR: GBNF accepting any UTF-8 text except CJK ideographs (Unified, Extension A and the
+# compatibility block). Hangul, Latin, digits and punctuation are unaffected.
+NO_HAN_GRAMMAR = "root ::= piece*\npiece ::= [^\u4e00-\u9fff\u3400-\u4dbf\uf900-\ufaff]"
+
+
 class LocalCompatibleChatOpenAI(NormalizedChatOpenAI):
     """OpenAI-compatible client for arbitrary local servers (LM Studio, vLLM,
     llama.cpp via the generic ``openai_compatible`` provider).
@@ -90,6 +95,10 @@ class LocalCompatibleChatOpenAI(NormalizedChatOpenAI):
             extra_body = payload.setdefault("extra_body", {})
             for key, value in sampling.items():
                 extra_body.setdefault(key, value)
+        # A custom grammar is rejected alongside tools and would displace the grammar
+        # response_format already installs, so it only goes on plain free-text calls.
+        if kr_setting("ban_han_characters") and not payload.get("tools") and not payload.get("response_format"):
+            payload.setdefault("extra_body", {}).setdefault("grammar", NO_HAN_GRAMMAR)
         return payload
 
 

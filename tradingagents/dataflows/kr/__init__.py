@@ -67,6 +67,13 @@ KR_DEFAULTS: dict = {
         "dry_base": 1.75,
         "dry_allowed_length": 4,
     },
+    # Hard-ban CJK ideographs with a GBNF grammar on llama.cpp. The model drops single
+    # Chinese connectives into Korean prose ("환경下的", "触发되므로"); the prompt rule alone
+    # did not stop it (9 Han characters in the 290650 v3 run). llama-server refuses a
+    # custom grammar together with tools ("Cannot use custom grammar constraints with
+    # tools") and response_format installs its own, so this reaches only the calls that
+    # carry neither -- the researcher and risk-debate nodes. Measured: no token/s cost.
+    "ban_han_characters": True,
 }
 
 
