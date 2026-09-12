@@ -63,6 +63,14 @@ def get_language_instruction() -> str:
     lang = get_config().get("output_language", "English")
     if lang.strip().lower() == "english":
         return ""
+    if lang.strip().lower() in ("korean", "한국어"):
+        # KR: a local multilingual model drops single Chinese words into Korean prose
+        # ("영업외 손실所致") and occasionally falls into a one-word decoding loop. Naming
+        # the script and the repetition limit costs a few tokens and removes both.
+        return (" Write your entire response in Korean, using 한글 only for Korean words. "
+                "Do not use 한자 (Chinese characters) anywhere; Latin letters are fine for "
+                "tickers, units and proper nouns. Never repeat the same word or phrase more "
+                "than twice in a row.")
     return f" Write your entire response in {lang}."
 
 

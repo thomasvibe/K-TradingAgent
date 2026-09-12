@@ -76,6 +76,22 @@ class LocalCompatibleChatOpenAI(NormalizedChatOpenAI):
             kwargs.setdefault("tool_choice", None)
         return super().with_structured_output(schema, method=method, **kwargs)
 
+    def _get_request_payload(self, input_, *, stop=None, **kwargs):
+        payload = super()._get_request_payload(input_, stop=stop, **kwargs)
+        # KR: llama.cpp accepts sampler settings the OpenAI schema has no field for
+        # (DRY repetition suppression). They go through extra_body because the openai
+        # SDK validates top-level params and rejects unknown ones (same route as #826).
+        from tradingagents.dataflows.kr import is_kr_market, kr_setting
+
+        if not is_kr_market():
+            return payload  # upstream local-server runs keep upstream sampling
+        sampling = kr_setting("sampling")
+        if sampling:
+            extra_body = payload.setdefault("extra_body", {})
+            for key, value in sampling.items():
+                extra_body.setdefault(key, value)
+        return payload
+
 
 def _input_to_messages(input_: Any) -> list:
     """Normalise a langchain LLM input to a list of message objects.

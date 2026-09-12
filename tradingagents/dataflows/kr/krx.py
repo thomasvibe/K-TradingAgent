@@ -218,6 +218,47 @@ def _corporate_action_lines(code: str, curr_date: str, days: int = 365) -> list[
         return []
 
 
+def _book_value_lines(code: str, curr_date: str, shares: int | None, close: float | None) -> list[str]:
+    """Book value per share from the latest DART equity and the KRX share count.
+
+    KRX publishes its own BPS, but it trails the last annual figure, so a reader
+    comparing it with a recent quarter has to divide 억원 by a share count across two
+    tools. That step produced a 10x error in the 290650 review run, so it is done
+    here and labelled as already computed. Fail-open: no DART, no lines.
+    """
+    if not shares or shares <= 0:
+        return []
+    try:
+        from .dart import latest_equity
+
+        eq = latest_equity(code, curr_date)
+    except Exception as exc:  # noqa: BLE001 — optional block, KRX snapshot stands alone
+        logger.debug("equity lookup unavailable for %s: %s", code, exc)
+        return []
+    if not eq:
+        return []
+    lines = [
+        f"# Derived book value — computed here from DART {eq['period']} equity and "
+        f"KRX 상장주식수 {shares:,}주; quote these figures, do not recompute them:",
+    ]
+    for label in ("자본총계", "지배기업소유주지분"):
+        value = eq.get(label)
+        if value is None:
+            continue
+        bps = value / shares
+        line = f"  {label} {value / 1e8:,.1f}억원 / {shares:,}주 = BPS {bps:,.0f}원"
+        if close and bps > 0:
+            line += f" (PBR at close {close:,.0f}원 = {close / bps:.2f})"
+        elif bps <= 0:
+            line += " (자본잠식 — PBR not meaningful)"
+        lines.append(line)
+    lines.append(
+        "  Caveat: 상장주식수 is the KRX listed count on this date. Shares from an announced but "
+        "not-yet-listed 증자 are excluded, so this BPS must be recomputed once the new shares list."
+    )
+    return lines
+
+
 # --- fundamentals (KRX valuation) --------------------------------------------
 
 def get_fundamentals(
@@ -287,12 +328,23 @@ def get_fundamentals(
             f"Foreign ownership (%): {_num(fr.get('지분율'))}",
             f"Foreign limit exhaustion (%): {_num(fr.get('한도소진률'))}",
         ]
+    close = None
     if not px.empty:
+        close = float(px["Close"].iloc[-1])
         lines += [
-            f"Close on {px.index[-1].date()}: {_num(px['Close'].iloc[-1], 0)}",
+            f"Close on {px.index[-1].date()}: {_num(close, 0)}",
             f"52-week high: {_num(px['High'].max(), 0)} (on {px['High'].idxmax().date()}, adjusted)",
             f"52-week low: {_num(px['Low'].min(), 0)} (on {px['Low'].idxmin().date()}, adjusted)",
         ]
+    shares = None
+    if not cap.empty:
+        try:
+            shares = int(float(cap.iloc[-1].get("상장주식수") or 0)) or None
+        except (TypeError, ValueError):
+            shares = None
+    book = _book_value_lines(code, curr_date, shares, close)
+    if book:
+        lines += [""] + book
     actions = _corporate_action_lines(code, curr_date)
     if actions:
         lines += [""] + actions

@@ -434,6 +434,31 @@ def get_cashflow(
     return _statement(ticker, curr_date, freq, "CF")
 
 
+def latest_equity(ticker: str, curr_date: str | None = None) -> dict | None:
+    """Equity from the most recent balance sheet observable on ``curr_date``, in raw KRW.
+
+    Exposed as structured numbers (not a rendered table) so a caller can derive
+    book value per share itself. The rendered statements report 억원, and asking a
+    model to divide 억원 by a share count is where a factor-of-ten slip appeared in
+    the 290650 review run; callers get the raw amount and do the division in code.
+    Returns ``None`` when no report is observable or neither equity row is present.
+    """
+    curr_date = curr_date or pd.Timestamp.today().strftime("%Y-%m-%d")
+    code = normalize_kr_symbol(ticker)
+    reports = available_reports(get_corp_code(code), curr_date)
+    if not reports:
+        return None
+    rep = reports[-1]
+    out: dict[str, Any] = {"period": _period_label(rep), "rcept_date": rep["rcept_date"], "fs_div": rep["fs_div"]}
+    for label, ids, pat in BS_ACCOUNTS:
+        if label in ("자본총계", "지배기업소유주지분"):
+            row = _pick(rep["rows"], STATEMENT_DIVS["BS"], ids, pat)
+            out[label] = _amount(row.get("thstrm_amount")) if row else None
+    if out.get("자본총계") is None and out.get("지배기업소유주지분") is None:
+        return None
+    return out
+
+
 # --- disclosures ------------------------------------------------------------------------
 
 # Filings that change the share count, capital structure or reported profit in a way the

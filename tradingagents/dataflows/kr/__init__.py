@@ -56,6 +56,17 @@ KR_DEFAULTS: dict = {
     "structured_output_method": "json_schema",
     # DART corp_code map refresh interval (days)
     "dart_corp_code_ttl_days": 7,
+    # Extra sampling parameters for the local OpenAI-compatible server, sent verbatim in
+    # the request body. llama.cpp's DRY sampler penalises a token that would extend an
+    # already-repeated sequence, with the penalty growing as the repeat gets longer, which
+    # kills the decoding loops seen on long Korean generations. dry_sequence_breakers
+    # resets matching at newlines by default, so markdown tables and repeated 억원/number
+    # formatting are not penalised. Set to {} to send nothing.
+    "sampling": {
+        "dry_multiplier": 0.8,
+        "dry_base": 1.75,
+        "dry_allowed_length": 4,
+    },
 }
 
 

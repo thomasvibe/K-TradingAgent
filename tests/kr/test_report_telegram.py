@@ -111,3 +111,28 @@ def test_send_never_raises(monkeypatch):
     assert telegram.send_text("hi") is False
     monkeypatch.delenv("TELEGRAM_BOT_TOKEN")
     assert telegram.send_text("hi") is False
+
+
+@pytest.mark.unit
+def test_omitted_price_fields_render_as_null_not_empty_string():
+    from kr.report import RunSummary, render_markdown
+
+    summary = RunSummary(ticker="290650", name="엘앤씨바이오", market="KOSDAQ", trade_date="2026-09-11",
+                         rating="Hold", model="m.gguf", run_seconds=1134.0)
+    fm = render_markdown(summary, {}, []).split("---")[1]
+    assert "entry_price: null" in fm and "price_target: null" in fm
+    assert 'entry_price: ""' not in fm
+
+
+@pytest.mark.unit
+def test_report_collapses_a_decoding_loop_and_says_so():
+    from kr.report import RunSummary, render_markdown
+
+    summary = RunSummary(ticker="000660", name="SK하이닉스", market="KOSPI", trade_date="2026-09-11",
+                         rating="Hold", model="m.gguf", run_seconds=10.0)
+    state = {"market_report": "밸류에이션 " + "哪怕" * 4552 + " 끝",
+             "investment_debate_state": {"history": "논쟁 " + "그러므로" * 300}}
+    out = render_markdown(summary, state, [])
+    assert "반복 4,552회 축약" in out and out.count("哪怕") == 3
+    assert "반복 300회 축약" in out
+    assert len(out) < 5000

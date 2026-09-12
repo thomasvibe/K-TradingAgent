@@ -119,3 +119,37 @@ def test_investor_flow_flags_block_days(kr_env, monkeypatch):
     out = krx.get_investor_flow("005930", TRADE_DATE, 20)
     assert "Notable days" in out
     assert "2025-09-09: 외국인합계 380.0, 기관합계" in out and "주식등의대량보유상황보고서" in out
+
+
+@pytest.mark.unit
+def test_book_value_lines_do_the_division_for_the_model(monkeypatch):
+    monkeypatch.setattr(
+        "tradingagents.dataflows.kr.dart.latest_equity",
+        lambda code, curr_date: {"period": "2026Q2 (접수 2026-08-14)", "rcept_date": "2026-08-14",
+                                 "fs_div": "CFS", "자본총계": 335190000000.0,
+                                 "지배기업소유주지분": 300000000000.0},
+    )
+    lines = krx._book_value_lines("290650", TRADE_DATE, 26969704, 47450.0)
+    body = "\n".join(lines)
+    # 3,351.9억원 / 26,969,704주 = 12,428원 -- the step the model got wrong by 10x.
+    assert "BPS 12,428원" in body and "PBR at close 47,450원 = 3.82" in body
+    assert "BPS 11,124원" in body          # 지배주주 기준
+    assert "not-yet-listed 증자" in body   # the share-count caveat travels with the number
+
+
+@pytest.mark.unit
+def test_book_value_lines_skip_when_share_count_or_dart_missing(monkeypatch):
+    monkeypatch.setattr("tradingagents.dataflows.kr.dart.latest_equity", lambda code, curr_date: None)
+    assert krx._book_value_lines("290650", TRADE_DATE, 26969704, 47450.0) == []
+    assert krx._book_value_lines("290650", TRADE_DATE, None, 47450.0) == []
+
+
+@pytest.mark.unit
+def test_book_value_lines_flag_negative_equity(monkeypatch):
+    monkeypatch.setattr(
+        "tradingagents.dataflows.kr.dart.latest_equity",
+        lambda code, curr_date: {"period": "2026Q2", "rcept_date": "2026-08-14", "fs_div": "CFS",
+                                 "자본총계": -50000000000.0, "지배기업소유주지분": None},
+    )
+    body = "\n".join(krx._book_value_lines("290650", TRADE_DATE, 10000000, 1000.0))
+    assert "자본잠식" in body and "PBR at close" not in body

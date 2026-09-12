@@ -23,12 +23,16 @@ def _row(sj_div, account_id, account_nm, thstrm, add=None, frmtrm=None, bfefrmtr
     return r
 
 
-def _report(bsns_year, reprt_code, rcept_no, revenue, revenue_cum, assets):
+def _report(bsns_year, reprt_code, rcept_no, revenue, revenue_cum, assets, equity="335190000000"):
     return [
         _row("IS", "ifrs-full_Revenue", "매출액", revenue, add=revenue_cum, rcept_no=rcept_no,
              reprt_code=reprt_code, bsns_year=str(bsns_year)),
         _row("BS", "ifrs-full_Assets", "자산총계", assets, rcept_no=rcept_no, reprt_code=reprt_code,
              bsns_year=str(bsns_year)),
+        _row("BS", "ifrs-full_Equity", "자본총계", equity, rcept_no=rcept_no, reprt_code=reprt_code,
+             bsns_year=str(bsns_year)),
+        _row("BS", "ifrs-full_EquityAttributableToOwnersOfParent", "지배기업의 소유주지분", equity,
+             rcept_no=rcept_no, reprt_code=reprt_code, bsns_year=str(bsns_year)),
         _row("CF", "ifrs-full_CashFlowsFromUsedInOperatingActivities", "영업활동현금흐름", revenue_cum,
              rcept_no=rcept_no, reprt_code=reprt_code, bsns_year=str(bsns_year)),
     ]
@@ -189,3 +193,18 @@ def test_parse_corp_code_zip(tmp_path):
     rows = dart.parse_corp_code_zip(buf.getvalue())
     assert rows == [("005930", "00126380", "삼성전자", "20250101")]
     assert json.dumps(rows)  # serialisable
+
+
+@pytest.mark.unit
+def test_latest_equity_returns_raw_krw_from_the_newest_observable_report(fake_dart):
+    eq = dart.latest_equity("005930", TRADE_DATE)
+    # 2025 H1 (filed 2025-08-14) is the newest report on or before the trade date;
+    # the Q3 row in the fixture is filed after it and must not be picked.
+    assert eq["period"].startswith("2025") and eq["rcept_date"] == "2025-08-14"
+    assert eq["자본총계"] == 335190000000.0
+    assert eq["지배기업소유주지분"] == 335190000000.0
+
+
+@pytest.mark.unit
+def test_latest_equity_is_none_without_observable_reports(fake_dart):
+    assert dart.latest_equity("005930", "2020-01-01") is None

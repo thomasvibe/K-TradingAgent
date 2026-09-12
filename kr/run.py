@@ -26,6 +26,7 @@ from kr.http_audit import HttpAudit
 from kr.llm_stats import FallbackCounter, NodeStatsHandler
 from kr.report import summarize, write_report
 from kr.telegram import format_summary, format_watchlist_table, send_document, send_text
+from kr.text_quality import scan as scan_text_quality
 
 logger = logging.getLogger("kr.run")
 FORBIDDEN_SOURCES = re.compile(r"Reddit|StockTwits|FRED|Polymarket|Yahoo|레딧|스탁트위츠|야후", re.IGNORECASE)
@@ -70,12 +71,14 @@ def run_one(ticker: str, date: str, args, config: dict) -> dict:
 
     reports = {k: final_state.get(k, "") for k in REPORT_KEYS}
     forbidden = sorted({m.group(0) for v in reports.values() for m in FORBIDDEN_SOURCES.finditer(v or "")})
+    quality = scan_text_quality(reports)
     http_report = audit.write(out_dir / "http_hosts.json") if audit else None
     summary = {
         "ticker": code, "trade_date": date, "signal": signal, "run_seconds": round(seconds, 1),
         "model": config["deep_think_llm"], "analysts": args.analysts,
         "structured_fallbacks": len(counter.fallbacks), "forbidden_source_mentions": forbidden,
         "http_offenders": (http_report or {}).get("offenders"), "totals": handler.totals(),
+        "text_quality": quality,
     }
     (out_dir / "final_state.json").write_text(json.dumps(
         {k: v for k, v in final_state.items() if k != "messages"}, ensure_ascii=False, indent=2, default=str))
@@ -83,6 +86,10 @@ def run_one(ticker: str, date: str, args, config: dict) -> dict:
     (out_dir / "stats.json").write_text(json.dumps({**summary, "stats": handler.to_json()}, ensure_ascii=False,
                                                    indent=2, default=str))
     (out_dir / "node_stats.md").write_text(handler.markdown_table(int(config.get("kr_context_window", 65536))) + "\n")
+    if quality["han_total"] or quality["repetition_loops"]:
+        logger.warning("%s %s text quality: %d Han chars %s; repetition loops %s",
+                       code, date, quality["han_total"], quality["han_distinct"][:12] or "none",
+                       {k: v[0]["count"] for k, v in quality["repetition_loops"].items()} or "none")
     logger.info("%s %s -> %s in %.0fs (fallbacks %d, forbidden %s, http offenders %s)",
                 code, date, signal, seconds, len(counter.fallbacks), forbidden or "none",
                 (http_report or {}).get("offenders") or "none")

@@ -14,6 +14,8 @@ import re
 from dataclasses import dataclass, field
 from pathlib import Path
 
+from kr.text_quality import collapse_repetition
+
 _NUM = r"([-+]?\d[\d,]*(?:\.\d+)?)"
 _FIELD_PATTERNS = {
     "rating": r"\*\*Rating\*\*:\s*\**\s*([A-Za-z]+)",
@@ -131,7 +133,9 @@ def summarize(final_state: dict, *, ticker: str, name: str, market: str, trade_d
 
 
 def _yaml(value) -> str:
-    if value is None or value == "":
+    if value is None:
+        return "null"  # a field the model omitted, distinct from an empty string
+    if value == "":
         return '""'
     if isinstance(value, bool):
         return "true" if value else "false"
@@ -147,7 +151,24 @@ def _callout(title: str, body: str) -> str:
     return f"> [!note]- {title}\n{quoted}\n"
 
 
+def _collapse_loops(value):
+    """Trim degenerate model repetition anywhere in the state tree, recursively.
+
+    Applied to the rendered report only. ``final_state.json`` keeps the raw text,
+    so nothing is lost; the report gains a marker naming the fragment and count
+    instead of thousands of repeated characters burying a section.
+    """
+    if isinstance(value, str):
+        return collapse_repetition(value)[0]
+    if isinstance(value, dict):
+        return {k: _collapse_loops(v) for k, v in value.items()}
+    if isinstance(value, list):
+        return [_collapse_loops(v) for v in value]
+    return value
+
+
 def render_markdown(summary: RunSummary, final_state: dict, sources: list[tuple[str, str]]) -> str:
+    final_state = _collapse_loops(final_state)
     fm = {
         "ticker": summary.ticker, "name": summary.name, "market": summary.market,
         "trade_date": summary.trade_date, "rating": summary.rating, "trader_action": summary.trader_action,

@@ -46,7 +46,14 @@ def _coerce_optional_float(value):
     stop at $15 on a $600 stock -- so it is dropped like a placeholder, leaving
     one bad field to null out instead of failing the whole proposal. A formatted
     price is reduced to its number. Anything else passes through to pydantic.
+
+    KR: a fourth shape is a zero or negative level. Models write 0 for "no entry"
+    on a Hold instead of omitting the field, and it reaches the report as an
+    ``entry_price: 0`` the reader has to interpret. No traded equity has a
+    non-positive price, so a non-positive level is dropped like a placeholder.
     """
+    if isinstance(value, (int, float)) and not isinstance(value, bool):
+        return None if value <= 0 else value  # KR: 0 means "omitted", not a price
     if not isinstance(value, str):
         return value
     text = value.strip()
@@ -57,7 +64,12 @@ def _coerce_optional_float(value):
         return None
     # KR: strip won markers ("71,500원", "₩71500", "KRW 71500") along with the upstream symbols.
     cleaned = _KR_UNIT_RE.sub("", text.replace(",", "")).strip().lstrip("$€£¥₩").strip()
-    return cleaned or None
+    if not cleaned:
+        return None
+    try:  # KR: "0" / "0.0" is the same placeholder as the numeric case above
+        return None if float(cleaned) <= 0 else cleaned
+    except ValueError:
+        return cleaned
 
 
 # ---------------------------------------------------------------------------
@@ -167,8 +179,9 @@ class TraderProposal(BaseModel):
         description=(
             "Optional entry price target as an absolute number in the instrument's "
             "quote currency (e.g. 189.5 for a USD stock, 71500 for a KRW stock), never a "  # KR
-            "percentage or a range. Omit it "
-            "if you cannot state a specific level."
+            "percentage or a range. Omit the field entirely when there is no new "  # KR
+            "entry -- a Hold that keeps an existing position, or any case where you "
+            "cannot state a specific level. Never write 0 or a placeholder."
         ),
     )
     stop_loss: float | None = Field(
@@ -255,7 +268,8 @@ class PortfolioDecision(BaseModel):
         default=None,
         description=(
             "Optional target price as an absolute number in the instrument's quote "
-            "currency (e.g. 210.0 for USD, 82000 for KRW); no unit suffix."  # KR
+            "currency (e.g. 210.0 for USD, 82000 for KRW); no unit suffix. Omit the "  # KR
+            "field when you are not naming a target; never write 0 as a stand-in."
         ),
     )
     time_horizon: str | None = Field(

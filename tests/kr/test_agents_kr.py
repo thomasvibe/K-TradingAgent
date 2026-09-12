@@ -197,3 +197,37 @@ def test_build_kr_config_wiring(monkeypatch):
     assert cfg["data_vendors"]["news_data"] == "naver" and cfg["tool_vendors"]["get_fundamentals"] == "krx"
     assert cfg["quick_think_llm"] == cfg["deep_think_llm"]
     assert cfg["max_debate_rounds"] == 2 and cfg["kr"]["naver_api"] == "hub"
+
+
+@pytest.mark.unit
+def test_zero_price_fields_are_treated_as_omitted():
+    """A Hold with no new entry must not reach the report as ``entry_price: 0``."""
+    from tradingagents.agents.schemas import (
+        PortfolioDecision,
+        TraderProposal,
+        render_trader_proposal,
+    )
+
+    p = TraderProposal(action="Hold", reasoning="관망", entry_price=0, stop_loss="46,600원")
+    assert p.entry_price is None and p.stop_loss == 46600.0
+    assert "Entry Price" not in render_trader_proposal(p)
+
+    assert TraderProposal(action="Hold", reasoning="x", entry_price="0.0").entry_price is None
+    assert TraderProposal(action="Sell", reasoning="x", entry_price=-100).entry_price is None
+    assert TraderProposal(action="Buy", reasoning="x", entry_price=71500).entry_price == 71500.0
+
+    decision = PortfolioDecision(rating="Hold", executive_summary="a", investment_thesis="b", price_target=0)
+    assert decision.price_target is None
+
+
+@pytest.mark.unit
+def test_korean_language_instruction_bans_han_and_repetition(kr_env):
+    from tradingagents.agents.utils.agent_utils import get_language_instruction
+    from tradingagents.dataflows.config import set_config
+
+    set_config({"market": "KR", "kr": {}, "output_language": "Korean"})
+    text = get_language_instruction()
+    assert "한글" in text and "한자" in text and "twice in a row" in text
+
+    set_config({"market": "US", "output_language": "English"})
+    assert get_language_instruction() == ""
