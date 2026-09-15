@@ -540,9 +540,11 @@ def get_market_overview(
             continue
         any_data = True
         close = frame["종가"].astype(float)
+        # 1d and 5d always, plus the look-back window unless it coincides with one of them.
+        horizons = sorted({1, 5, min(n, len(close) - 1)} - {0})
         lines += [
             f"### {label} (index {idx}) — close {close.iloc[-1]:,.2f} on {frame.index[-1].date()}",
-            f"- returns: 1d {_ret(close, 1)}, 5d {_ret(close, 5)}, {min(n, len(close) - 1)}d {_ret(close, min(n, len(close) - 1))}",
+            "- returns: " + ", ".join(f"{h}d {_ret(close, h)}" for h in horizons),
             f"- {n}-day high/low: {close.tail(n).max():,.2f} / {close.tail(n).min():,.2f}",
         ]
         if "거래대금" in frame.columns:

@@ -153,3 +153,12 @@ def test_book_value_lines_flag_negative_equity(monkeypatch):
     )
     body = "\n".join(krx._book_value_lines("290650", TRADE_DATE, 10000000, 1000.0))
     assert "자본잠식" in body and "PBR at close" not in body
+
+
+@pytest.mark.unit
+def test_market_overview_does_not_repeat_a_return_horizon(kr_env):
+    for days in (5, 1, 10):
+        for line in krx.get_market_overview(TRADE_DATE, days).splitlines():
+            if line.startswith("- returns:"):
+                labels = [part.split()[0] for part in line.removeprefix("- returns: ").split(", ")]
+                assert len(labels) == len(set(labels)), line
